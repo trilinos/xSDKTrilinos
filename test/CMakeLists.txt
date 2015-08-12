@@ -1,0 +1,6 @@
+if (HAVE_PETSC)
+ADD_SUBDIRECTORY(petsc)
+endif()
+if(HYPRE)
+ADD_SUBDIRECTORY(hypre)
+endif()

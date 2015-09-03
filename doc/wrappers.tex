@@ -1,0 +1,344 @@
+\documentclass[pdf,12pt,report,strict]{SANDreport}
+
+\usepackage{fancyvrb}
+\usepackage{listings}
+\usepackage[usenames,dvipsnames]{xcolor}
+\usepackage{mathtools}
+\usepackage{pxfonts}
+\usepackage[T1]{fontenc}
+
+\newcommand{\COMMENT}[1]{{\color{red} COMMENT: #1}}
+
+\title{How to customize Trilinos}
+\author{Alicia Marie Klinvex}
+
+\SANDauthor{Alicia Marie Klinvex}
+\SANDnum{SAND2015-XXXX}
+\SANDprintDate{September, 2015}
+
+\begin{document}
+
+\maketitle
+
+\definecolor{keywordColor}{HTML}{91236C}
+\definecolor{stringColor}{HTML}{2D04FF}
+\definecolor{commentColor}{HTML}{87AF9B}
+
+\lstset{
+  language=C++,
+  backgroundcolor=\color{black!5},
+  basicstyle=\tiny\ttfamily,
+  numbers=left,
+  breaklines=true,
+  commentstyle=\color{commentColor},
+  keywordstyle=\bfseries\color{keywordColor},
+  stringstyle=\color{stringColor},
+  showstringspaces=false
+}
+
+\renewcommand{\lstlistingname}{Program}
+
+\SANDmain
+
+\chapter{Creating a custom operator class} 
+The Krylov solver package Belos and the eigensolver package Anasazi are
+templated on operators rather than matrices, so they can be used with custom
+operators.  These custom operators can even be matrix-free. If you wish to use
+any of these solvers, all you have to do is define an apply operation through
+the OperatorTraits class.
+\COMMENT{There should be an example here.}
+Alternatively, you can define your own subclass of Tpetra::Operator; let us
+call it MyOp.  You will only need to define four functions within MyOp:
+\begin{itemize}
+  \item constructor
+  \item apply
+  \item getDomainMap
+  \item getRangeMap
+\end{itemize}
+The apply method should take a Tpetra::MultiVector $x$, scalars $\alpha$ and
+$\beta$, and compute Tpetra::MultiVector $y = \alpha x + \beta y$.  The function
+getDomainMap should return a map describing the parallel distribution of $x$
+across MPI processes, and getRangeMap should similarly describe the distribution
+of $y$.  You may also override the function hasTransposeApply, which returns
+true if MyOp supports applying the transpose or conjugate transpose; this
+function returns false by default. 
+
+\section{Example: a diagonal matrix requiring no communication}
+First, let us examine an example which requires no communication to compute a
+matrix vector product, Program \ref{diagCode}.
+
+\paragraph{Lines 7--18}
+These lines rename some of the types we will be using in this program for
+enhanced readability.
+
+\paragraph{Lines 20--25}
+These lines tell the compiler which namespace to find RCP, vector, cout, etc in.
+
+\paragraph{Lines 29--55}
+Here, we define our class MyOp, which is a subclass of Tpetra::Operator.  We
+provide a single constructor, which takes a Vector \emph{diagonal} as a
+parameter.  The entries in this vector represent the diagonal entries of our
+matrix.  Our destructor does not have to do anything, since RCP handles the 
+memory management for us.  The domain and range map of this matrix are the 
+same, and they are defined by the distribution of \emph{diagonal}, i.e. if the
+first four entries of \emph{diagonal} are owned by MPI process 0, the first
+four rows of MyOp $A$ are also owned by process 0.  Our apply method calls a
+function in Tpetra::MultiVector to compute $y_{i,j}=\alpha d_i x_{i,j}+\beta
+y_{i,j}$, where $d_i$ is the $i$-th diagonal entry of MyOp.  Since our operator
+is symmetric, we can safely ignore the \emph{mode} parameter, which specifies
+whether we should use $A$ or $A^T$ in the multiplication.  We also overrode the
+function hasTransposeApply to return true rather than false, since $A$ and $A^T$
+are the same.
+
+\paragraph{Lines 61--66}
+These lines initialize MPI and determine the rank of the current process.
+
+\paragraph{Lines 69--83}
+The first few lines set the default values of parameters such as the tolerance
+of the Krylov solver and the dimensions of the operator.  Then, we parse the
+command line arguments.  If the user runs the program like this:
+
+{\ttfamily mpirun -np 4 MinresDiagonalUserOp.exe --n=1000 --verbose \\}
+then we will use an operator of order 1000 and print information at each minres
+iteration.
+
+\paragraph{Lines 86--93}
+Here, we define a block row distribution for our matrix.  We create a random
+vector representing the diagonal of the matrix, then provide it to the MyOp
+constructor.
+
+\paragraph{Lines 96--103}
+These lines construct an initial guess vector for minres as well as a right hand
+side.  The initial guess is the $0$ vector, and the right hand side is random. 
+We then define a linear problem based on the operator, the solution vector, and
+the right hand side.
+
+\paragraph{Lines 106--129}
+We construct a list of parameters for minres, defining such things as the
+tolerance, maximum number of iterations, and the amount of output we want from
+Belos.  After that, we construct a minres solver and use it to solve the linear
+system.  We then compute the residual norms to make sure the solution
+$X$ returned by minres was correct.
+
+\begin{lstinputlisting}[caption=MinresDiagonalUserOpEx.cpp,
+label=diagCode]{../../TrilinosDir/Trilinos/packages/belos/tpetra/example/Minres/MinresDiagonalUserOpEx.cpp}
+\end{lstinputlisting}
+
+\section{Example: 2D discretization of the Laplace operator}
+The previous example did not require any communication during the matrix-vector
+multiplication.  We will now examine one that does; this time, we solve a linear
+system $Ax=b$ where $A$ is the 2D discretization of the Laplace operator
+(Program \ref{laplace2DCode}).
+
+\paragraph{Lines 32--56}
+Like before, we define a custom subclass of Tpetra::Operator, with the required
+functions we discussed previously.  Note that we do not explicitly store the
+matrix, and that our class now includes a private data member called importer\_. 
+We will discuss this object in greater detail when we get to the implementation
+of the apply method.
+
+\paragraph{Lines 62--131}
+Our main function looks much the same as it did before.  The only differences
+are in the command line arguments and the arguments for the MyOp constructor.
+
+\paragraph{Lines137--180}
+These lines define the constructor of MyOp.  As before, we define a map
+describing the block row distribution of our matrix (called sourceMap\_).  Since
+matrix vector products will require communication in this case, we also define
+targetMap\_.  This map defines what remote data is required by each MPI process. 
+For example, if $n_x = 2$, $n_y = 3$, and we run 3 MPI processes, our
+matrix-vector multiplication will look like this:
+
+\begin{equation*}
+\begin{bmatrix*}[r]
+4 & -1 & \color{gray}-1\\
+-1 & 4 &  & \color{gray}-1\\
+\hline 
+\color{gray}-1 &  & 4 & -1 & \color{gray}-1\\
+ & \color{gray}-1 & -1 & 4 &  & \color{gray}-1\\
+\hline 
+ &  & \color{gray}-1 &  & 4 & -1\\
+ &  &  & \color{gray}-1 & -1 & 4\\
+\end{bmatrix*}
+\begin{bmatrix*}
+\color{red}x_0 \\
+\color{red}x_1 \\
+\hline
+\color{blue} x_2 \\
+\color{blue} x_3 \\
+\hline
+\color{PineGreen}x_4 \\
+\color{PineGreen}x_5
+\end{bmatrix*}
+=
+\begin{bmatrix*}
+\textcolor{black}{4x_0-x_1}\textcolor{blue}{-x_2} \\
+\textcolor{black}{-x_0+4x_1}\textcolor{blue}{-x_3} \\
+\hline
+\textcolor{red}{-x_0}\textcolor{black}{+4x_2-x_3}\textcolor{PineGreen}{-x_4}
+\\
+\textcolor{red}{-x_1}\textcolor{black}{-x_2+4x_3}\textcolor{PineGreen}{-x_5}
+\\
+\hline
+\textcolor{blue}{-x_2}\textcolor{black}{+4x_4-x_5}
+\\
+\textcolor{blue}{-x_3}\textcolor{black}{-x_4+4x_5}
+\end{bmatrix*}
+=
+\begin{bmatrix*}
+\color{red}y_0 \\
+\color{red}y_1 \\
+\hline
+\color{blue}y_2 \\
+\color{blue}y_3 \\
+\hline
+\color{PineGreen}y_4 \\
+\color{PineGreen}y_5
+\end{bmatrix*}
+\end{equation*}
+
+Our source map (which describes the distribution of $x$) is defined as
+
+\begin{center}
+\begin{tabular}{|l|c|}
+\hline
+Process \# & Rows owned \\
+\hline \hline
+0 & $\left\{0,1\right\}$ \\
+1 & $\left\{2,3\right\}$ \\
+2 & $\left\{4,5\right\}$ \\
+\hline
+\end{tabular}
+\end{center}
+
+and the target map is 
+\footnote{Alternatively, we could define the target map as
+
+\begin{center}
+\begin{tabular}{|l|c|}
+\hline
+Process \# & Rows owned \\
+\hline \hline
+0 & $\left\{0,1,2,3\right\}$ \\
+1 & $\left\{0,1,2,3,4,5\right\}$ \\
+2 & $\left\{2,3,4,5\right\}$ \\
+\hline
+\end{tabular}
+\end{center}
+}
+\begin{center}
+\begin{tabular}{|l|c|}
+\hline
+Process \# & Rows owned \\
+\hline \hline
+0 & $\left\{2,3\right\}$ \\
+1 & $\left\{0,1,4,5\right\}$ \\
+2 & $\left\{2,3\right\}$ \\
+\hline
+\end{tabular}
+\end{center}
+
+After we have the source and target map, we can define a Tpetra::Import object,
+which is used to redistribute data amongst MPI processes.
+Importers require a source map with a uniquely owned (nonoverlapping)
+distribution, but the target map does not have such requirements.
+We will learn more about how to use the importer in the apply method.
+
+\paragraph{Lines 186--250}
+In the apply method, the first thing we do is replace $Y$ with $\beta Y$, since
+we are computing $Y = \alpha AX + \beta Y$.
+Then we grab a pointer to the Tpetra::MultiVector $X$'s raw data and store it in
+a multidimensional ArrayRCP\footnote{Think of an ArrayRCP as a standard C array
+with more features that handle memory management.  You can index into it like
+you would any other array.}.  It is important to note that Tpetra stores its
+multivectors in column-major order, so if you want to obtain the entry in row
+$r$ and column $c$, you must query $X[c][r]$.  Next, we perform as much of the
+matrix-vector multiplication as we can without communication, meaning the
+following operation:
+\begin{equation*}
+\begin{bmatrix*}[r]
+4 & -1 & \color{gray}*\\
+-1 & 4 &  & \color{gray}*\\
+\hline 
+\color{gray}* &  & 4 & -1 & \color{gray}*\\
+ & \color{gray}* & -1 & 4 &  & \color{gray}*\\
+\hline 
+ &  & \color{gray}* &  & 4 & -1\\
+ &  &  & \color{gray}* & -1 & 4\\
+\end{bmatrix*}
+\begin{bmatrix*}
+\color{red}x_0 \\
+\color{red}x_1 \\
+\hline
+\color{blue} x_2 \\
+\color{blue} x_3 \\
+\hline
+\color{PineGreen}x_4 \\
+\color{PineGreen}x_5
+\end{bmatrix*}
+=
+\begin{bmatrix*}
+4x_0-x_1 \\
+-x_0+4x_1 \\
+\hline
+4x_2-x_3 \\
+-x_2+4x_3 \\
+\hline
+4x_4-x_5 \\
+-x_4+4x_5
+\end{bmatrix*}
+\end{equation*}
+Note that we have ignored all matrix entries that are not part of the diagonal
+blocks in this step, since their contributions depend on elements of $x$ held on
+other processes.  The function sumIntoLocalValue does exactly what the name
+suggests: it computes Y[c][r] = Y[c][r] + val.
+
+Line 224 creates a vector whose distribution is defined by the
+targetMap\_.  Since Tpetra::MultiVector is a subclass of Tpetra::DistObject, we
+can call doImport to redistribute the data.  After doImport is called, redistX
+contains all the data we need to compute the matrix-vector product.  Here is
+what each MPI process sees in its local piece of redistX:
+
+\begin{center}
+\begin{tabular}{|l|c|}
+\hline
+Process \# & Local view of redistX \\
+\hline \hline
+0 & $\left\{x_2,x_3\right\}$ \\
+1 & $\left\{x_0,x_1,x_4,x_5\right\}$ \\
+2 & $\left\{x_2,x_3\right\}$ \\
+\hline
+\end{tabular}
+\end{center}
+
+We then obtain a pointer to the raw data in redistX the same way we did before.
+On MPI process 1, redistX[0][0]=$x_0$, redistX[0][1]=$x_1$, redistX[0][2]=$x_4$,
+and redistX[0][3]=$x_5$.  If you have trouble sorting out the indexing, remember
+that you can always use the map to convert local to global ordinals and
+vice-versa via getLocalElement and getGlobalElement as seen in the following
+table:
+
+\begin{center}
+\begin{tabular}{|l|c|}
+\hline
+localIndex & targetMap\_->getGlobalElement(localIndex) \\
+\hline \hline
+0 & 0 \\
+1 & 1 \\
+2 & 4 \\
+3 & 5 \\
+\hline
+\end{tabular}
+\end{center}
+
+Note that there is not a single line of raw MPI code in this driver, since the
+Import object handled all the communication for us.
+
+\begin{lstinputlisting}[caption=MinresPoisson2DUserOpEx.cpp,
+label=laplace2DCode]{../../TrilinosDir/Trilinos/packages/belos/tpetra/example/Minres/MinresPoisson2DUserOpEx.cpp}
+\end{lstinputlisting}
+
+\chapter{Creating a custom matrix class}
+
+\chapter{Creating a custom vector class}
+\end{document}

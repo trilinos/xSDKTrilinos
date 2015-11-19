@@ -678,8 +678,6 @@ private:
   bool UsePreconditioner_;
   //! This contains a list of function pointers that will be called in compute
   std::vector<Teuchos::RCP<FunctionParameter> > FunsToCall_;
-  //! true if the row map of provided matrix is in form that Hypre likes
-  bool NiceRowMap_;
 };
 
 
@@ -703,9 +701,11 @@ Ifpack2_Hypre<Scalar,LocalOrdinal,GlobalOrdinal,Node>::Ifpack2_Hypre(const Teuch
   NumFunsToCall_(0),
   SolverType_(Hypre::PCG),
   PrecondType_(Hypre::Euclid),
-  UsePreconditioner_(false),
-  NiceRowMap_(true)
+  UsePreconditioner_(false)
 {
+  TEUCHOS_TEST_FOR_EXCEPTION(!A_->isFillComplete(),std::invalid_argument,
+      "Ifpack2::Hypre: Please call fillComplete and try again.");
+
   IsSolverSetup_ = new bool[1];
   IsPrecondSetup_ = new bool[1];
   IsSolverSetup_[0] = false;
@@ -713,23 +713,23 @@ Ifpack2_Hypre<Scalar,LocalOrdinal,GlobalOrdinal,Node>::Ifpack2_Hypre(const Teuch
   MPI_Comm comm = GetMpiComm();
   int ilower = A_->getRowMap()->getMinGlobalIndex();
   int iupper = A_->getRowMap()->getMaxGlobalIndex();
-  // Need to check if the RowMap is the way Hypre expects (if not more difficult)
+  // Need to check if the RowMap is the way Hypre expects
+  bool niceRowMap = true;
   std::vector<int> ilowers; ilowers.resize(Comm()->getSize());
   std::vector<int> iuppers; iuppers.resize(Comm()->getSize());
   int myLower = ilower;
   int myUpper = iupper;
-  Teuchos::gatherAll(*Comm(),1,&myLower,1,ilowers.data());
-  Teuchos::gatherAll(*Comm(),1,&myUpper,1,iuppers.data());
+  Teuchos::gatherAll(*Comm(),1,&myLower,Comm()->getSize(),ilowers.data());
+  Teuchos::gatherAll(*Comm(),1,&myUpper,Comm()->getSize(),iuppers.data());
   for(int i = 0; i < Comm()->getSize()-1; i++){
-    NiceRowMap_ = (NiceRowMap_ && iuppers[i]+1 == ilowers[i+1]);
+    niceRowMap = (niceRowMap && iuppers[i]+1 == ilowers[i+1]);
   }
-  if(!NiceRowMap_){
-    ilower = (A_->getGlobalNumRows() / Comm()->getSize())*Comm()->getRank();
-    iupper = (A_->getGlobalNumRows() / Comm()->getSize())*(Comm()->getRank()+1)-1;
-    if(Comm()->getRank() == Comm()->getSize()-1){
-      iupper = A_-> getGlobalNumRows()-1;
-    }
-  }
+
+  TEUCHOS_TEST_FOR_EXCEPTION(!niceRowMap,std::invalid_argument,
+      "Ifpack2::Hypre: hypre expects the matrix to be distributed a certain way. "
+      "It needs each MPI process to own a continuous set of rows. "
+      "Unfortunately, your data is not distributed in such a way. "
+      "Please redistribute your data and try again.");
 
   // Next create vectors that will be used when ApplyInverse() is called
   HYPRE_IJVectorCreate(comm, ilower, iupper, &XHypre_);
@@ -796,13 +796,13 @@ void Ifpack2_Hypre<Scalar,LocalOrdinal,GlobalOrdinal,Node>::initialize(){
     HYPRE_IJMatrixCreate(comm, ilower, iupper, ilower, iupper, &HypreA_);
     HYPRE_IJMatrixSetObjectType(HypreA_, HYPRE_PARCSR);
     HYPRE_IJMatrixInitialize(HypreA_);
-    for(int i = 0; i < A_->getNodeNumRows(); i++){
+    for(size_t i = 0; i < A_->getNodeNumRows(); i++){
       int numElements = A_->getNumEntriesInLocalRow(i);
       Teuchos::Array<LocalOrdinal> indices(numElements);
       Teuchos::Array<Scalar> values(numElements);
       size_t numEntries;
       A_->getLocalRowCopy(i, indices(), values(), numEntries);
-      for(int j = 0; j < numEntries; j++){
+      for(size_t j = 0; j < numEntries; j++){
         indices[j] = A_->getColMap()->getGlobalElement(indices[j]);
       }
       int GlobalRow[1];
@@ -982,10 +982,10 @@ void Ifpack2_Hypre<Scalar,LocalOrdinal,GlobalOrdinal,Node>::apply(const Tpetra::
   { // Start timer here
     Teuchos::TimeMonitor timeMon (*timer);
 
-    int NumVectors = X.getNumVectors();
+    size_t NumVectors = X.getNumVectors();
     TEUCHOS_TEST_FOR_EXCEPTION(NumVectors != Y.getNumVectors(), std::runtime_error,
          Teuchos::typeName (*this) << "::apply(): X and Y must have the same number of vectors.");
-    for(int VecNum = 0; VecNum < NumVectors; VecNum++) {
+    for(size_t VecNum = 0; VecNum < NumVectors; VecNum++) {
       //Get values for current vector in multivector.
       Teuchos::ArrayRCP<const double> XValues = X.getData(VecNum);
       Teuchos::ArrayRCP<double> YValues = Y.getDataNonConst(VecNum);
@@ -1022,13 +1022,13 @@ int Ifpack2_Hypre<Scalar,LocalOrdinal,GlobalOrdinal,Node>::Multiply(bool TransA,
          Teuchos::typeName (*this) << "::Multiply(): Preconditioner has not been initialized.");
 
   bool SameVectors = false;
-  int NumVectors = X.getNumVectors();
+  size_t NumVectors = X.getNumVectors();
   TEUCHOS_TEST_FOR_EXCEPTION(NumVectors != Y.getNumVectors(), std::runtime_error,
          Teuchos::typeName (*this) << "::Multiply(): X and Y must have the same number of vectors.");
   if(X.Pointers() == Y.Pointers()){
     SameVectors = true;
   }
-  for(int VecNum = 0; VecNum < NumVectors; VecNum++) {
+  for(size_t VecNum = 0; VecNum < NumVectors; VecNum++) {
     //Get values for current vector in multivector.
     double * XValues;
     double * YValues;

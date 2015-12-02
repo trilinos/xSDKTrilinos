@@ -385,20 +385,6 @@ public:
 
   // @{ Mathematical functions.
 
-  //! Returns the result of a Tpetra_Operator multiplied with a multivector X in Y.
-  /*! In this implementation, we use the Hypre matrix to multiply with so that the map is the same
-      as what is expected in solving methods.
-
-    \param
-    trans - (In) If true, use the transpose operation.
-           X - (In) A Tpetra_MultiVector of dimension NumVectors to mulitply with.
-    \param Out
-           Y - (Out) A Tpetra_MultiVector of dimension NumVectors containing result.
-
-    \return Integer error code, set to 0 if successful.
-  */
-  int Multiply(bool Trans, const Tpetra::MultiVector< Scalar, LocalOrdinal, GlobalOrdinal, Node >& X, Tpetra::MultiVector< Scalar, LocalOrdinal, GlobalOrdinal, Node >& Y) const;
-
   //! Returns the result of a Tpetra_Operator inverse applied to an Tpetra_MultiVector X in Y.
   /*! In this implementation, we use several existing attributes to determine how virtual
       method apply() should call the concrete method Solve().  We pass in the UpperTriangular(),
@@ -442,10 +428,10 @@ public:
   }
 
   //! Returns a reference to the map that should be used for domain.
-  Teuchos::RCP<const Tpetra::Map<LocalOrdinal, GlobalOrdinal, Node> > getDomainMap() const{ return MySimpleMap_;}
+  Teuchos::RCP<const Tpetra::Map<LocalOrdinal, GlobalOrdinal, Node> > getDomainMap() const{ return A_->getDomainMap();}
 
   //! Returns a reference to the map that should be used for range.
-  Teuchos::RCP<const Tpetra::Map<LocalOrdinal, GlobalOrdinal, Node> > getRangeMap() const{ return MySimpleMap_;}
+  Teuchos::RCP<const Tpetra::Map<LocalOrdinal, GlobalOrdinal, Node> > getRangeMap() const{ return A_->getRangeMap();}
 
   //! Returns 0.0 because this class cannot compute Inf-norm.
   double NormInf() const {return(0.0);};
@@ -666,8 +652,6 @@ private:
   bool *IsPrecondSetup_;
   //! Is the system to be solved or apply preconditioner
   Hypre::Hypre_Chooser SolveOrPrec_;
-  //! This is a linear map used the way it is in Hypre
-  Teuchos::RCP<const Tpetra::Map<LocalOrdinal, GlobalOrdinal, Node> > MySimpleMap_;
   //! Counter of the number of parameters set
   int NumFunsToCall_;
   //! Which solver was chosen
@@ -711,25 +695,20 @@ Ifpack2_Hypre<Scalar,LocalOrdinal,GlobalOrdinal,Node>::Ifpack2_Hypre(const Teuch
   IsSolverSetup_[0] = false;
   IsPrecondSetup_[0] = false;
   MPI_Comm comm = GetMpiComm();
-  int ilower = A_->getRowMap()->getMinGlobalIndex();
-  int iupper = A_->getRowMap()->getMaxGlobalIndex();
-  // Need to check if the RowMap is the way Hypre expects
-  bool niceRowMap = true;
-  std::vector<int> ilowers; ilowers.resize(Comm()->getSize());
-  std::vector<int> iuppers; iuppers.resize(Comm()->getSize());
-  int myLower = ilower;
-  int myUpper = iupper;
-  Teuchos::gatherAll(*Comm(),1,&myLower,Comm()->getSize(),ilowers.data());
-  Teuchos::gatherAll(*Comm(),1,&myUpper,Comm()->getSize(),iuppers.data());
-  for(int i = 0; i < Comm()->getSize()-1; i++){
-    niceRowMap = (niceRowMap && iuppers[i]+1 == ilowers[i+1]);
-  }
 
-  TEUCHOS_TEST_FOR_EXCEPTION(!niceRowMap,std::invalid_argument,
-      "Ifpack2::Hypre: hypre expects the matrix to be distributed a certain way. "
-      "It needs each MPI process to own a continuous set of rows. "
-      "Unfortunately, your data is not distributed in such a way. "
-      "Please redistribute your data and try again.");
+  // Check the map
+  // hypre needs A, X, and Y to have the same contiguous distribution
+  // NOTE: Maps are only considered to be contiguous if they were generated using a
+  // particular constructor.  Otherwise, LinearMap() will not detect whether they are
+  // actually contiguous.
+  TEUCHOS_TEST_FOR_EXCEPTION(!A_->getDomainMap()->isContiguous(), std::runtime_error,
+      Teuchos::typeName (*this) << "::apply(): A's domain map must be contiguous for hypre.");
+
+  TEUCHOS_TEST_FOR_EXCEPTION(!A_->getDomainMap()->isSameAs(*A_->getRangeMap()), std::runtime_error,
+      Teuchos::typeName (*this) << "::apply(): A's domain and range map must be the same for hypre.");
+
+  int ilower = A_->getDomainMap()->getMinGlobalIndex();
+  int iupper = A_->getDomainMap()->getMaxGlobalIndex();
 
   // Next create vectors that will be used when ApplyInverse() is called
   HYPRE_IJVectorCreate(comm, ilower, iupper, &XHypre_);
@@ -750,11 +729,6 @@ Ifpack2_Hypre<Scalar,LocalOrdinal,GlobalOrdinal,Node>::Ifpack2_Hypre(const Teuch
   YVec_ = (hypre_ParVector *) hypre_IJVectorObject(((hypre_IJVector *) YHypre_));
   YLocal_ = hypre_ParVectorLocalVector(YVec_);
   
-  Teuchos::Array<int> rows(iupper - ilower + 1);
-  for(int i = ilower; i <= iupper; i++){
-    rows[i-ilower] = i;
-  }
-  MySimpleMap_ = Teuchos::rcp(new Tpetra::Map<LocalOrdinal, GlobalOrdinal, Node>(A_-> getGlobalNumRows(), rows(), 0, A_->getComm()));
 } //Constructor
 
 //==============================================================================
@@ -791,8 +765,8 @@ void Ifpack2_Hypre<Scalar,LocalOrdinal,GlobalOrdinal,Node>::initialize(){
     Teuchos::TimeMonitor timeMon (*timer);
 
     MPI_Comm comm = GetMpiComm();
-    int ilower = MySimpleMap_->getMinGlobalIndex();
-    int iupper = MySimpleMap_->getMaxGlobalIndex();
+    int ilower = A_->getDomainMap()->getMinGlobalIndex();
+    int iupper = A_->getDomainMap()->getMaxGlobalIndex();
     HYPRE_IJMatrixCreate(comm, ilower, iupper, ilower, iupper, &HypreA_);
     HYPRE_IJMatrixSetObjectType(HypreA_, HYPRE_PARCSR);
     HYPRE_IJMatrixInitialize(HypreA_);
@@ -807,7 +781,7 @@ void Ifpack2_Hypre<Scalar,LocalOrdinal,GlobalOrdinal,Node>::initialize(){
       }
       int GlobalRow[1];
       GlobalRow[0] = A_->getRowMap()->getGlobalElement(i);
-      HYPRE_IJMatrixSetValues(HypreA_, 1, &numElements, GlobalRow, &indices[0], &values[0]);
+      HYPRE_IJMatrixAddToValues(HypreA_, 1, &numElements, GlobalRow, &indices[0], &values[0]);
     }
     HYPRE_IJMatrixAssemble(HypreA_);
     HYPRE_IJMatrixGetObject(HypreA_, (void**)&ParMatrix_);
@@ -978,6 +952,11 @@ void Ifpack2_Hypre<Scalar,LocalOrdinal,GlobalOrdinal,Node>::apply(const Tpetra::
   TEUCHOS_TEST_FOR_EXCEPTION(!isComputed(), std::runtime_error,
          Teuchos::typeName (*this) << "::apply(): Preconditioner has not been computed.");
 
+  TEUCHOS_TEST_FOR_EXCEPTION(!A_->getDomainMap()->isSameAs(*X.getMap()), std::runtime_error,
+      Teuchos::typeName (*this) << "::apply(): X's map must match A's domain map.");
+
+  TEUCHOS_TEST_FOR_EXCEPTION(!A_->getRangeMap()->isSameAs(*Y.getMap()), std::runtime_error,
+      Teuchos::typeName (*this) << "::apply(): Y's map must match A's range map.");
 
   { // Start timer here
     Teuchos::TimeMonitor timeMon (*timer);
@@ -1014,60 +993,6 @@ void Ifpack2_Hypre<Scalar,LocalOrdinal,GlobalOrdinal,Node>::apply(const Tpetra::
   numApply_++;
   applyTime_ = timer->totalElapsedTime();
 } //ApplyInverse()
-
-//==============================================================================
-template<class Scalar, class LocalOrdinal, class GlobalOrdinal, class Node>
-int Ifpack2_Hypre<Scalar,LocalOrdinal,GlobalOrdinal,Node>::Multiply(bool TransA, const Tpetra::MultiVector< Scalar, LocalOrdinal, GlobalOrdinal, Node >& X, Tpetra::MultiVector< Scalar, LocalOrdinal, GlobalOrdinal, Node >& Y) const{
-  TEUCHOS_TEST_FOR_EXCEPTION(!isInitialized(), std::runtime_error,
-         Teuchos::typeName (*this) << "::Multiply(): Preconditioner has not been initialized.");
-
-  bool SameVectors = false;
-  size_t NumVectors = X.getNumVectors();
-  TEUCHOS_TEST_FOR_EXCEPTION(NumVectors != Y.getNumVectors(), std::runtime_error,
-         Teuchos::typeName (*this) << "::Multiply(): X and Y must have the same number of vectors.");
-  if(X.Pointers() == Y.Pointers()){
-    SameVectors = true;
-  }
-  for(size_t VecNum = 0; VecNum < NumVectors; VecNum++) {
-    //Get values for current vector in multivector.
-    double * XValues;
-    double * YValues;
-    (*X(VecNum)).ExtractView(&XValues);
-    double *XTemp = XLocal_->data;
-    double *YTemp = YLocal_->data;
-    if(!SameVectors){
-      (*Y(VecNum)).ExtractView(&YValues);
-    } else {
-      YValues = new double[X.MyLength()];
-    }
-    YLocal_->data = YValues;
-    HYPRE_ParVectorSetConstantValues(ParY_,0.0);
-    // Temporarily make a pointer to data in Hypre for end
-    // Replace data in Hypre vectors with tpetra values
-    XLocal_->data = XValues;
-    // Do actual computation.
-    if(TransA) {
-      // Use transpose of A in multiply
-      HYPRE_ParCSRMatrixMatvecT(1.0, ParMatrix_, ParX_, 1.0, ParY_);
-    } else {
-      HYPRE_ParCSRMatrixMatvec(1.0, ParMatrix_, ParX_, 1.0, ParY_);
-    }
-    if(SameVectors){
-      int NumEntries = Y.MyLength();
-      std::vector<double> new_values; new_values.resize(NumEntries);
-      std::vector<int> new_indices; new_indices.resize(NumEntries);
-      for(int i = 0; i < NumEntries; i++){
-        new_values[i] = YValues[i];
-        new_indices[i] = i;
-      }
-      (*Y(VecNum)).ReplaceMyValues(NumEntries, &new_values[0], &new_indices[0]);
-      delete[] YValues;
-    }
-    XLocal_->data = XTemp;
-    YLocal_->data = YTemp;
-  }
-  return 0;
-} //Multiply()
 
 //==============================================================================
 template<class Scalar, class LocalOrdinal, class GlobalOrdinal, class Node>

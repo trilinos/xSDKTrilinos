@@ -2,24 +2,8 @@ INCLUDE(TribitsAddExecutableAndTest)
 
 INCLUDE_DIRECTORIES(REQUIRED_DURING_INSTALLATION_TESTING ${CMAKE_CURRENT_SOURCE_DIR})
 
-
 TRIBITS_ADD_EXECUTABLE_AND_TEST(
-  HypreBadMap
-  SOURCES HypreBadMapTest.cpp
-  NUM_MPI_PROCS 2
-  COMM mpi
-  )
-  
-  TRIBITS_ADD_EXECUTABLE_AND_TEST(
-  HypreAcceptableMap
-  SOURCES HypreAcceptableMapTest.cpp
-  NUM_MPI_PROCS 2
-  COMM mpi
-  )
-  
-  TRIBITS_ADD_EXECUTABLE_AND_TEST(
-  HypreNoFillComplete
-  SOURCES HypreNoFillCompleteTest.cpp
-  NUM_MPI_PROCS 2
-  COMM mpi
+  HypreTest
+  SOURCES hypre_UnitTest.cpp ${TEUCHOS_STD_UNIT_TEST_MAIN}
+  COMM serial mpi
   )

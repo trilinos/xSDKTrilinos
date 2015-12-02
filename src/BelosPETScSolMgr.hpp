@@ -69,7 +69,7 @@
 //Note: Petsc internally hard-codes paths to headers, relative to the PETSC home
 //      directory.  This means that --with-incdirs must contain the full path(s)
 //      to the header below plus the PETSc home directory.
-#include "../petsc_install/include/petscksp.h"
+#include "include/petscksp.h"
 #include <type_traits>
 
 // TODO: Because PETSc is using its own vector class, Kokkos is not being used for vector operations.
@@ -140,7 +140,7 @@ public:
   static void unwrapVector(ScalarType* x, Teuchos::RCP<MV> trilinosX)
   {  
      Teuchos::ArrayRCP<const ScalarType> rawData = trilinosX->getData(0);
-     for(int i=0; i<trilinosX->getLocalLength(); i++) x[i] = rawData[i];
+     for(size_t i=0; i<trilinosX->getLocalLength(); i++) x[i] = rawData[i];
   }
 };
 
@@ -558,7 +558,6 @@ ReturnType PETScSolMgr<ScalarType,MV,OP>::solve()
   PC petscPrec;
   PetscInt localLength, globalLength, tmpInt;
   PetscReal norm;
-  void * ctx;
 
   bool isConverged = true;
 

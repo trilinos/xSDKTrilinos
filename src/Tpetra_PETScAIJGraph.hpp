@@ -274,8 +274,8 @@ PETScAIJGraph<LO,GO,Node>::PETScAIJGraph(Mat PETScMat)
   }
 
   Array<int> ColGIDs(numLocalCols_);
-  for (int i=0; i<PETScLocalCols; i++) ColGIDs[i] = rowStart + i;
-  for (int i=PETScLocalCols; i<numLocalCols_; i++) ColGIDs[i] = aij->garray[i-PETScLocalCols];
+  for (PetscInt i=0; i<PETScLocalCols; i++) ColGIDs[i] = rowStart + i;
+  for (size_t i=PETScLocalCols; i<numLocalCols_; i++) ColGIDs[i] = aij->garray[i-PETScLocalCols];
 
   // Create the column map
   // TODO: Will the index base always be 0?

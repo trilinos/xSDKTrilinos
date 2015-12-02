@@ -1,56 +1,49 @@
-#include <Teuchos_ScalarTraits.hpp>
-#include <Teuchos_RCP.hpp>
-#include <Teuchos_GlobalMPISession.hpp>
-#include <Teuchos_oblackholestream.hpp>
-#include <Teuchos_Tuple.hpp>
-#include <Teuchos_VerboseObject.hpp>
+// This needs to be here; I don't know why.
 
-#include <Tpetra_DefaultPlatform.hpp>
-#include <Tpetra_Map.hpp>
-#include <Tpetra_MultiVector.hpp>
-#include <Tpetra_CrsMatrix.hpp>
+#ifdef HAVE_MUELU_GALER
+#include <Galeri_XpetraParameters.hpp>
+#include <Galeri_XpetraProblemFactory.hpp>
+#include <Galeri_XpetraUtils.hpp>
+#include <Galeri_XpetraMaps.hpp>
+#endif
 
-#include "Amesos2.hpp"
-#include "Amesos2_Version.hpp"
+// This needs to be here; I can guess why.
+#include <MueLu.hpp>
+#include <MueLu_ParameterListInterpreter.hpp>
+#ifdef HAVE_MUELU_TPETRA
+#  include <MueLu_CreateTpetraPreconditioner.hpp>
+#else
+#  error "This example requires that Tpetra be enabled in MueLu."
+#endif
 
+// Put these below all the stuff above, because MueLu is weird.
+#include "ml_MultiLevelPreconditioner.h"
 #include "petscksp.h"
+#include "Tpetra_ConfigDefs.hpp"
 #include "Tpetra_PETScAIJMatrix.hpp"
 #include "Tpetra_Vector.hpp"
+#include "Tpetra_Map.hpp"
+#include "BelosPseudoBlockCGSolMgr.hpp"
+#include "BelosTpetraAdapter.hpp"
 
   using Teuchos::RCP;
   using Teuchos::rcp;
   using Teuchos::ArrayView;
 
-  typedef double Scalar;
-  typedef int LO;
-  typedef int GO;
-
-#ifdef HAVE_AMESOS2_EXPLICIT_INSTANTIATION
-// Explicitly instantiate for RowMatrix (not done in Amesos2 by
-// default, currently).
-template class Amesos2::KLU2<Tpetra::RowMatrix<Scalar, LO, GO>,
-			     Tpetra::MultiVector<Scalar, LO, GO> >;
-
-#include <Amesos2_SolverCore_def.hpp>
-// template class Amesos2::SolverCore<Amesos2::KLU2, Tpetra::RowMatrix<Scalar, LO, GO>, 
-// 				   Tpetra::MultiVector<Scalar, LO, GO> >;
-#endif // HAVE_AMESOS2_EXPLICIT_INSTANTIATION
-
-  typedef Tpetra::CrsMatrix<Scalar,LO,GO> MAT;
-  typedef Tpetra::MultiVector<Scalar,LO,GO> MV;
-
-//  typedef Tpetra::CrsMatrix<>                       CrsMatrix;
-//  typedef Tpetra::Tpetra_PETScAIJMatrix<>           PETScAIJMatrix;
-//  typedef PETScAIJMatrix::scalar_type               Scalar;
-//  typedef PETScAIJMatrix::local_ordinal_type        LO;
-//  typedef PETScAIJMatrix::global_ordinal_type       GO;
-//  typedef PETScAIJMatrix::node_type                 Node;
-  typedef Tpetra::Vector<Scalar,LO,GO>         Vector;
-  typedef Tpetra::Map<LO,GO>                   Map;
-  typedef Tpetra::Operator<Scalar,LO,GO>       OP;
-  typedef Tpetra::MultiVector<Scalar,LO,GO>    MV;
-  typedef Tpetra::Vector<Scalar,LO,GO>         Vector;
-  typedef Amesos2::Solver<Tpetra::RowMatrix<Scalar,LO,GO>,MV>        Solver;
+  typedef Tpetra::PETScAIJMatrix<>                  PETScAIJMatrix;
+  typedef PETScAIJMatrix::scalar_type               Scalar;
+  typedef PETScAIJMatrix::local_ordinal_type        LO;
+  typedef PETScAIJMatrix::global_ordinal_type       GO;
+  typedef PETScAIJMatrix::node_type                 Node;
+  typedef Tpetra::CrsMatrix<Scalar,LO,GO,Node>      CrsMatrix;
+  typedef Tpetra::Vector<Scalar,LO,GO,Node>         Vector;
+  typedef MueLu::TpetraOperator<Scalar,LO,GO,Node>  MueLuOp;
+  typedef Tpetra::Map<LO,GO,Node>                   Map;
+  typedef Tpetra::Operator<Scalar,LO,GO,Node>       OP;
+  typedef Tpetra::MultiVector<Scalar,LO,GO,Node>    MV;
+  typedef Tpetra::Vector<Scalar,LO,GO,Node>         Vector;
+  typedef Belos::LinearProblem<Scalar,MV,OP>        LP;
+  typedef Belos::PseudoBlockCGSolMgr<Scalar,MV,OP>  SolMgr;
 
 /* 
    This example demonstrates how to apply a Trilinos preconditioner to a PETSc
@@ -68,7 +61,7 @@ template class Amesos2::KLU2<Tpetra::RowMatrix<Scalar, LO, GO>,
 
    To invoke this example, use something like:
 
-       mpirun -np 5 ./TrilinosCouplings_petsc.exe -m 150 -n 150 -petsc_smoother -ksp_monitor_true_residual
+       mpirun -np 5 ./binary.exe -m 150 -n 150 -petsc_smoother -ksp_monitor_true_residual
 */
 
 static char help[] = "Demonstrates how to solve a PETSc linear system with KSP\
@@ -81,7 +74,9 @@ Input parameters include:\n\
   -m <mesh_x>       : number of mesh points in x-direction\n\
   -n <mesh_n>       : number of mesh points in y-direction\n\n";
 
-RCP<MAT> PETScAIJMatrixToTpetraCrsMatrix(Mat A);
+RCP<CrsMatrix> PETScAIJMatrixToTpetraCrsMatrix(Mat A);
+
+extern PetscErrorCode ShellApplyML(PC,Vec,Vec);
 
 #undef __FUNCT__
 #define __FUNCT__ "main"
@@ -90,7 +85,8 @@ int main(int argc,char **args)
   Vec            x,b,u;  /* approx solution, RHS, exact solution */
   Mat            A;        /* linear system matrix */
   KSP            ksp;     /* linear solver context */
-  PC             pc;
+  KSP            kspSmoother=0;  /* solver context for PETSc fine grid smoother */
+  PC pc;
   PetscRandom    rctx;     /* random number generator context */
   PetscReal      norm;     /* norm of solution error */
   PetscInt       i,j,Ii,J,Istart,Iend,its;
@@ -132,7 +128,10 @@ int main(int argc,char **args)
   /* Wrap the PETSc matrix as a Tpetra_PETScAIJMatrix. This is lightweight,
      i.e., no deep data copies. */
 //  RCP<PETScAIJMatrix> epA = rcp(new PETScAIJMatrix(A));
-  RCP<MAT> epA = PETScAIJMatrixToTpetraCrsMatrix(A);
+  RCP<CrsMatrix> epA = PETScAIJMatrixToTpetraCrsMatrix(A);
+
+  std::cout << "isLocallyIndexed: " << epA->isLocallyIndexed() << std::endl;
+  std::cout << "isGloballyIndexed: " << epA->isGloballyIndexed() << std::endl;
 
   ierr = VecCreate(PETSC_COMM_WORLD,&u);CHKERRQ(ierr);
   ierr = VecSetSizes(u,PETSC_DECIDE,m*n);CHKERRQ(ierr);
@@ -177,18 +176,83 @@ int main(int argc,char **args)
   ierr = VecNorm(b,NORM_2,&norm);CHKERRQ(ierr);
   if (rank == 0) printf("||petsc b||_2  = %f\n",norm);
 
-  /* Create an Amesos2 linear solver */
-  RCP<Solver> solver = Amesos2::create<Tpetra::RowMatrix<Scalar,LO,GO>,MV>("KLU2", epA, epu, epb);
+  /* Create the ML AMG preconditioner. */
 
-  /* Perform a linear solve with Amesos2 */
-  solver->symbolicFactorization().numericFactorization().solve();
+  /* Parameter list that holds options for AMG preconditioner. */
+  Teuchos::ParameterList mlList;
+  mlList.set("parameterlist: syntax", "ml");
+  /* Set recommended defaults for Poisson-like problems. */
+//  ML_Epetra::SetDefaults("SA",mlList);
+  /* Specify how much information ML prints to screen.
+     0 is the minimum (no output), 10 is the maximum. */
+  mlList.set("ML output",10);
+  /* Set the fine grid smoother.  PETSc will be much faster for any
+     smoother requiring row access, e.g., SOR.  For any smoother whose
+     kernel is a matvec, Trilinos/PETSc performance should be comparable,
+     as Trilinos simply calls the PETSc matvec.
 
-  /* Perform a linear solve with PETSc's KSP */
+     To use a PETSc smoother, create a KSP object, set the KSP type to
+     KSPRICHARDSON, and set the desired smoother as the KSP preconditioner.
+     It is important that you call KSPSetInitialGuessNonzero.  Otherwise, the
+     post-smoother phase will incorrectly ignore the current approximate
+     solution.  The KSP pointer must be cast to void* and passed to ML via
+     the parameter list.
+
+     You are responsible for freeing the KSP object.
+  */
+  ierr = PetscOptionsHasName(PETSC_NULL,"-petsc_smoother",&flg);CHKERRQ(ierr);
+  if (flg) {
+    ierr = KSPCreate(comm,&kspSmoother);CHKERRQ(ierr);
+    ierr = KSPSetOperators(kspSmoother,A,A);CHKERRQ(ierr);
+    ierr = KSPSetType(kspSmoother,KSPRICHARDSON);CHKERRQ(ierr);
+    ierr = KSPSetTolerances(kspSmoother, 1e-12, 1e-50, 1e7,1);
+    ierr = KSPSetInitialGuessNonzero(kspSmoother,PETSC_TRUE);CHKERRQ(ierr);
+    ierr = KSPGetPC(kspSmoother,&pc);CHKERRQ(ierr);
+    ierr = PCSetType(pc, PCSOR);CHKERRQ(ierr);
+    ierr = PCSORSetSymmetric(pc,SOR_LOCAL_SYMMETRIC_SWEEP);CHKERRQ(ierr);
+    ierr = PCSetFromOptions(pc);CHKERRQ(ierr);
+    ierr = KSPSetUp(kspSmoother);CHKERRQ(ierr);
+    mlList.set("smoother: type (level 0)","petsc");
+    mlList.set("smoother: petsc ksp (level 0)",(void*)kspSmoother);
+  } else {
+    mlList.set("smoother: type (level 0)","symmetric Gauss-Seidel");
+  }
+
+  /* how many fine grid pre- or post-smoothing sweeps to do */
+  mlList.set("smoother: sweeps (level 0)",2);
+
+  mlList.print();
+
+  RCP<MueLuOp> Prec = MueLu::CreateTpetraPreconditioner(Teuchos::rcp_dynamic_cast<OP>(epA), mlList);
+
+  /* Trilinos CG */
+  epu->putScalar(0.0);
+  RCP<LP> Problem = rcp(new LP(epA, epu, epb));
+  Problem->setLeftPrec(Prec);
+  Problem->setProblem();
+  RCP<Teuchos::ParameterList> cgPL = rcp(new Teuchos::ParameterList());
+  cgPL->set("Maximum Iterations", 200);
+  cgPL->set("Verbosity", Belos::IterationDetails + Belos::FinalSummary + Belos::TimingDetails);
+  cgPL->set("Convergence Tolerance", 1e-12);
+  SolMgr solver(Problem,cgPL);
+  solver.solve();
+
+  /* PETSc CG */
   ierr = KSPCreate(PETSC_COMM_WORLD,&ksp);CHKERRQ(ierr);
   ierr = KSPSetOperators(ksp,A,A);CHKERRQ(ierr);
+  ierr = KSPSetTolerances(ksp,1e-12,1.e-50,PETSC_DEFAULT,
+                          PETSC_DEFAULT);CHKERRQ(ierr);
+  ierr = KSPSetType(ksp,KSPCG);CHKERRQ(ierr);
+
+  /* Wrap the ML preconditioner as a PETSc shell preconditioner. */
   ierr = KSPGetPC(ksp,&pc);CHKERRQ(ierr);
-  ierr = PCSetType(pc,PCLU);CHKERRQ(ierr);
-  ierr = PCFactorSetMatSolverPackage(pc,MATSOLVERSUPERLU_DIST);CHKERRQ(ierr);
+  ierr = PCSetType(pc,PCSHELL);CHKERRQ(ierr);
+  ierr = PCShellSetApply(pc,ShellApplyML);CHKERRQ(ierr);
+  ierr = PCShellSetContext(pc,(void*)Prec.get());CHKERRQ(ierr);
+  ierr = PCShellSetName(pc,"MueLu AMG");CHKERRQ(ierr); 
+
+  ierr = KSPSetFromOptions(ksp);CHKERRQ(ierr);
+
   ierr = KSPSolve(ksp,b,x);CHKERRQ(ierr);
 
   ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
@@ -204,13 +268,15 @@ int main(int argc,char **args)
   ierr = VecDestroy(&u);CHKERRQ(ierr);  ierr = VecDestroy(&x);CHKERRQ(ierr);
   ierr = VecDestroy(&b);CHKERRQ(ierr);  ierr = MatDestroy(&A);CHKERRQ(ierr);
 
+  if (kspSmoother) {ierr = KSPDestroy(&kspSmoother);CHKERRQ(ierr);}
+
   ierr = PetscFinalize();CHKERRQ(ierr);
   return 0;
 } /*main*/
 
 /* ***************************************************************** */
 
-RCP<MAT> PETScAIJMatrixToTpetraCrsMatrix(Mat A)
+RCP<CrsMatrix> PETScAIJMatrixToTpetraCrsMatrix(Mat A)
 {
   PetscErrorCode ierr;
 
@@ -245,7 +311,7 @@ RCP<MAT> PETScAIJMatrixToTpetraCrsMatrix(Mat A)
   }
 
   // Create the matrix and set its values
-  RCP<MAT> TrilinosMat = rcp(new MAT(map,ncolsPerRow,Tpetra::StaticProfile));
+  RCP<CrsMatrix> TrilinosMat = rcp(new CrsMatrix(map,ncolsPerRow,Tpetra::StaticProfile));
   const PetscInt * cols;
   const PetscScalar * vals;
   for(int i=0; i < numLocalRows; i++)
@@ -262,3 +328,47 @@ RCP<MAT> PETScAIJMatrixToTpetraCrsMatrix(Mat A)
 
   return TrilinosMat;
 }
+
+PetscErrorCode ShellApplyML(PC pc,Vec x,Vec y)
+{
+  PetscErrorCode  ierr;
+  MueLuOp *mlp = 0;
+  void* ctx;
+
+  ierr = PCShellGetContext(pc,&ctx); CHKERRQ(ierr);  
+  mlp = (MueLuOp*)ctx;
+
+  /* Wrap x and y as Tpetra_Vectors. */
+  PetscInt length;
+  ierr = VecGetLocalSize(x,&length);CHKERRQ(ierr);
+  const PetscScalar *xvals;
+  PetscScalar *yvals;
+
+  ierr = VecGetArrayRead(x,&xvals);CHKERRQ(ierr);
+  ierr = VecGetArray(y,&yvals);CHKERRQ(ierr);
+
+  ArrayView<const PetscScalar> xView(xvals,length);
+  ArrayView<PetscScalar> yView(yvals,length);
+
+  Vector epx(mlp->getDomainMap(),xView); // TODO: see if there is a way to avoid copying the data
+  Vector epy(mlp->getDomainMap(),yView);
+
+  /* Apply ML. */
+  mlp->apply(epx,epy);
+
+  /* Rip the data out of epy */
+  Teuchos::ArrayRCP<const Scalar> epxData = epx.getData();
+  Teuchos::ArrayRCP<const Scalar> epyData = epy.getData();
+
+  for(int i=0; i< epyData.size(); i++)
+  {
+    yvals[i] = epyData[i];
+  }
+  
+  /* Clean up and return. */
+  ierr = VecRestoreArrayRead(x,&xvals);CHKERRQ(ierr);
+  ierr = VecRestoreArray(y,&yvals);CHKERRQ(ierr);
+
+  return 0;
+} /*ShellApplyML*/
+

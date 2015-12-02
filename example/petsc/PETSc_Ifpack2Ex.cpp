@@ -1,50 +1,3 @@
-//@HEADER
-// ************************************************************************
-//
-//                 Belos: Block Linear Solvers Package
-//                  Copyright 2004 Sandia Corporation
-//
-// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
-// the U.S. Government retains certain rights in this software.
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are
-// met:
-//
-// 1. Redistributions of source code must retain the above copyright
-// notice, this list of conditions and the following disclaimer.
-//
-// 2. Redistributions in binary form must reproduce the above copyright
-// notice, this list of conditions and the following disclaimer in the
-// documentation and/or other materials provided with the distribution.
-//
-// 3. Neither the name of the Corporation nor the names of the
-// contributors may be used to endorse or promote products derived from
-// this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY SANDIA CORPORATION "AS IS" AND ANY
-// EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
-// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL SANDIA CORPORATION OR THE
-// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
-// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-// PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-// LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-// NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-// Questions? Contact Michael A. Heroux (maherou@sandia.gov)
-//
-// ************************************************************************
-//@HEADER
-//
-// This driver reads a problem from a file, which can be in Harwell-Boeing (*.hb),
-// Matrix Market (*.mtx), or triplet format (*.triU, *.triS).  The right-hand side
-// from the problem, if it exists, will be used instead of multiple random
-// right-hand-sides.  The initial guesses are all set to zero.  An ILU preconditioner
-// is constructed using the Ifpack factory.
-//
 #include "BelosConfigDefs.hpp"
 #include "BelosLinearProblem.hpp"
 #include "BelosTpetraAdapter.hpp"
@@ -76,11 +29,11 @@ int main(int argc, char *argv[]) {
   using Teuchos::RCP;
   using Teuchos::rcp;
 
-  // Initialize MPI
+  // ************************* Initialize MPI **************************
   Teuchos::oblackholestream blackhole;
   Teuchos::GlobalMPISession mpiSession (&argc, &argv, &blackhole);
 
-  // Get the default communicator and node
+  // ************** Get the default communicator and node **************
   RCP<const Teuchos::Comm<int> > comm = Tpetra::DefaultPlatform::getDefaultPlatform().getComm();
   const int myRank = comm->getRank();
 
@@ -94,6 +47,7 @@ int main(int argc, char *argv[]) {
   std::string filename("/home/amklinv/matrices/cage4.mtx");
   MT tol = 1.0e-5;           // relative residual tolerance
 
+  // ***************** Read the command line arguments *****************
   Teuchos::CommandLineProcessor cmdp(false,false);
   cmdp.setOption("verbose","quiet",&verbose,"Print messages and results.");
   cmdp.setOption("left-prec","right-prec",&leftprec,"Left preconditioning or right.");
@@ -109,9 +63,7 @@ int main(int argc, char *argv[]) {
     frequency = -1;  // reset frequency if test is not verbose
   proc_verbose = verbose && (myRank==0); /* Only print on the zero processor */
 
-  //
-  // *************Get the problem*********************
-  //
+  // ************************* Get the problem *************************
   RCP<CrsMatrix> A = Tpetra::MatrixMarket::Reader<CrsMatrix>::readSparseFile(filename,comm);
   RCP<MV> B = rcp(new MV(A->getRowMap(),numrhs,false));
   RCP<MV> X = rcp(new MV(A->getRowMap(),numrhs,false));
@@ -119,9 +71,7 @@ int main(int argc, char *argv[]) {
   MVT::MvInit(*X);
   MVT::MvInit(*B,1);
 
-  //
-  // ************Construct preconditioner*************
-  //
+  // ******************** Construct preconditioner *********************
   Ifpack2::Factory factory;
   RCP<Prec> M = factory.create("RELAXATION", A.getConst());
   ParameterList ifpackParams;
@@ -130,9 +80,7 @@ int main(int argc, char *argv[]) {
   M->initialize();
   M->compute();
 
-  //
-  // *****Create parameter list for the block GMRES solver manager*****
-  //
+  // ******* Create parameter list for the Belos solver manager ********
   const int NumGlobalElements = MVT::GetGlobalLength(*B);
   if (maxiters == -1)
     maxiters = NumGlobalElements - 1; // maximum number of iterations to run
@@ -152,9 +100,7 @@ int main(int argc, char *argv[]) {
   else
     belosList.set( "Verbosity", Belos::Errors + Belos::Warnings + Belos::FinalSummary );
 
-  //
-  // *******Construct a preconditioned linear problem********
-  //
+  // ************ Construct a preconditioned linear problem ************
   RCP<Belos::LinearProblem<double,MV,OP> > problem
     = rcp( new Belos::LinearProblem<double,MV,OP>( A, X, B ) );
   if (leftprec) {
@@ -170,16 +116,12 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  // Create an iterative solver manager.
+  // **************** Create an iterative solver manager ***************
   RCP< Belos::PETScSolMgr<double,MV,OP> > solver
     = rcp( new Belos::PETScSolMgr<double,MV,OP>(problem, rcp(&belosList,false)) );
   solver->setCLA(argc,argv);
 
-  //
-  // *******************************************************************
-  // **************Start the block CG iteration*************************
-  // *******************************************************************
-  //
+  // ****************** Start the block CG iteration *******************
   if (proc_verbose) {
     std::cout << std::endl << std::endl;
     std::cout << "Dimension of matrix: " << NumGlobalElements << std::endl;
@@ -188,13 +130,11 @@ int main(int argc, char *argv[]) {
     std::cout << "Relative residual tolerance: " << tol << std::endl;
     std::cout << std::endl;
   }
-  //
-  // Perform solve
-  //
+
+  // ************************** Perform solve **************************
   Belos::ReturnType ret = solver->solve();
-  //
-  // Compute actual residuals.
-  //
+
+  // ********************* Compute actual residuals ********************
   bool badRes = false;
   std::vector<double> actual_resids( numrhs );
   std::vector<double> rhs_norm( numrhs );

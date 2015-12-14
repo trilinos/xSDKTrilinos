@@ -224,7 +224,6 @@ PETScAIJGraph<LO,GO,Node>::PETScAIJGraph(Mat PETScMat)
   MatType type;
   MatInfo info;
   PetscInt PETScCols, PETScLocalCols, rowStart;
-  const PetscInt * colIndices;
 
   // Wrap the communicator in a Teuchos Comm
 #ifdef HAVE_MPI

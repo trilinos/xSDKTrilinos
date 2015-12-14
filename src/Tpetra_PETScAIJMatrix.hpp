@@ -296,7 +296,7 @@ void PETScAIJMatrix<Scalar,LO,GO,Node>::getGlobalRowCopy(GO GlobalRow, const Teu
 
   // Check whether we have enough space to store the row
   NumEntries = getNumEntriesInGlobalRow(GlobalRow);
-  TEUCHOS_TEST_FOR_EXCEPTION(Indices.size() < NumEntries || Values.size() < NumEntries, std::runtime_error,
+  TEUCHOS_TEST_FOR_EXCEPTION(Indices.size() < (GO)NumEntries || Values.size() < (GO)NumEntries, std::runtime_error,
          Teuchos::typeName (*this) << "::getGlobalRowCopy(): ArrayViews are not large enough to store the requested data.");
 
   // Get PETSc's row
@@ -332,7 +332,7 @@ void PETScAIJMatrix<Scalar,LO,GO,Node>::getLocalDiagCopy(Vector<Scalar,LO,GO,Nod
   ierr = VecGetArray(v,&diagonal);CHKERRV(ierr);
 
   // Copy it to a Trilinos Vector
-  for(LO i=0; i<nlocal; i++)
+  for(size_t i=0; i<nlocal; i++)
   {
     diag.replaceLocalValue(i,diagonal[i]);
   }

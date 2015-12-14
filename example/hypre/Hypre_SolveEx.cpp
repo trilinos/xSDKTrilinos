@@ -45,12 +45,7 @@
 // right-hand-sides.  The initial guesses are all set to zero.  An ICT preconditioner
 // is constructed using the Ifpack factory.
 //
-#include "BelosConfigDefs.hpp"
-#include "BelosLinearProblem.hpp"
-#include "BelosTpetraAdapter.hpp"
-#include "BelosPseudoBlockCGSolMgr.hpp"
 
-#include "MatrixMarket_Tpetra.hpp"
 #include "Tpetra_Map.hpp"
 #include "Tpetra_CrsMatrix.hpp"
 #include "Tpetra_DefaultPlatform.hpp"
@@ -63,9 +58,13 @@
 #include "Teuchos_StandardCatchMacros.hpp"
 
 int main(int argc, char *argv[]) {
+  using Teuchos::Array;
   using Teuchos::RCP;
   using Teuchos::rcp;
   using Teuchos::ParameterList;
+  using Ifpack2::FunctionParameter;
+  using Ifpack2::Hypre::Prec;
+  using Ifpack2::Hypre::Solver;
 
   //
   // Specify types used in this example
@@ -79,6 +78,7 @@ int main(int argc, char *argv[]) {
   typedef Tpetra::MultiVector<Scalar> MV;
   typedef Tpetra::Operator<Scalar> OP;
   typedef Ifpack2::Preconditioner<Scalar> Preconditioner;
+  typedef Tpetra::Map<> Map;
 
   //
   // Initialize the MPI session
@@ -92,16 +92,16 @@ int main(int argc, char *argv[]) {
   Platform &platform = Tpetra::DefaultPlatform::getDefaultPlatform();
   RCP<const Teuchos::Comm<int> > comm = platform.getComm();
   RCP<Node> node = platform.getNode();
-  const int myRank = comm->getRank();
+  int rank = comm->getRank();
 
   //
   // Get parameters from command-line processor
   //
-  std::string filenameA("/home/amklinv/matrices/nos4.mtx");
+  int nx = 10;
   Scalar tol = 1e-6;
-  bool verbose = true;
+  bool verbose = false;
   Teuchos::CommandLineProcessor cmdp(false,true);
-  cmdp.setOption("fileA",&filenameA, "Filename for the Matrix-Market matrix.");
+  cmdp.setOption("nx",&nx, "Number of mesh points in x direction.");
   cmdp.setOption("tolerance",&tol, "Relative residual used for solver.");
   cmdp.setOption("verbose","quiet",&verbose, "Whether to print a lot of info or a little bit.");
   if(cmdp.parse(argc,argv) != Teuchos::CommandLineProcessor::PARSE_SUCCESSFUL) {
@@ -109,9 +109,47 @@ int main(int argc, char *argv[]) {
   }
 
   //
-  // Read the matrix from a file
+  // Create the row map
   //
-  RCP<const Tpetra::RowMatrix<> > A = Tpetra::MatrixMarket::Reader<CrsMatrix>::readSparseFile(filenameA, comm, node);
+  int n = nx*nx;
+  RCP<Map> map = rcp(new Map(n,0,comm));
+
+  //
+  // Create the 2D Laplace operator
+  //
+  RCP<CrsMatrix> A = rcp(new CrsMatrix(map,5));
+  for(LO i = 0; i<nx; i++) {
+    for(LO j = 0; j<nx; j++) {
+      GO row = i*nx+j;
+      if(!map->isNodeGlobalElement(row))
+        continue;
+
+      Array<LO> indices;
+      Array<Scalar> values;
+
+      if(i > 0) {
+        indices.push_back(row - nx);
+        values.push_back(-1.0);
+      }
+      if(i < nx-1) {
+        indices.push_back(row + nx);
+        values.push_back(-1.0);
+      }
+      indices.push_back(row);
+      values.push_back(4.0);
+      if(j > 0) {
+        indices.push_back(row-1);
+        values.push_back(-1.0);
+      }
+      if(j < nx-1) {
+        indices.push_back(row+1);
+        values.push_back(-1.0);
+      }
+      A->insertGlobalValues(row,indices,values);
+    }
+  }
+  A->fillComplete();
+
 
   //
   // Create the right hand side
@@ -121,50 +159,37 @@ int main(int argc, char *argv[]) {
   B->randomize();
 
   //
+  // Create the parameters for hypre
+  //
+  RCP<FunctionParameter> functs[10];
+  functs[0] = rcp(new FunctionParameter(Prec, &HYPRE_BoomerAMGSetPrintLevel, 1)); // print AMG solution info
+  functs[1] = rcp(new FunctionParameter(Prec, &HYPRE_BoomerAMGSetCoarsenType, 6)); // Falgout coarsening
+  functs[2] = rcp(new FunctionParameter(Prec, &HYPRE_BoomerAMGSetRelaxType, 6)); // Sym GS/Jacobi hybrid
+  functs[3] = rcp(new FunctionParameter(Prec, &HYPRE_BoomerAMGSetNumSweeps, 1)); // Sweeps on each level
+  functs[4] = rcp(new FunctionParameter(Prec, &HYPRE_BoomerAMGSetTol, 0.0)); // Conv tolerance zero
+  functs[5] = rcp(new FunctionParameter(Prec, &HYPRE_BoomerAMGSetMaxIter, 1)); // Do only one iteration!
+  functs[6] = rcp(new FunctionParameter(Solver, &HYPRE_PCGSetMaxIter, 1000)); // Maximum iterations
+  functs[7] = rcp(new FunctionParameter(Solver, &HYPRE_PCGSetTol, tol)); // Convergence tolerance
+  functs[8] = rcp(new FunctionParameter(Solver, &HYPRE_PCGSetTwoNorm, 1)); // Use the two-norm as the stopping criteria
+  functs[9] = rcp(new FunctionParameter(Solver, &HYPRE_PCGSetPrintLevel, 2)); // Print solve info
+
+  //
   // Create the preconditioner
   //
   RCP<Preconditioner> prec = rcp(new Ifpack2::Ifpack2_Hypre<Scalar,LO,GO,Node>(A));
   ParameterList hypreList;
-  hypreList.set("SolveOrPrecondition", Ifpack2::Hypre::Prec);
+  hypreList.set("SolveOrPrecondition", Solver);
+  hypreList.set("Solver", Ifpack2::Hypre::PCG);
   hypreList.set("Preconditioner", Ifpack2::Hypre::BoomerAMG);
+  hypreList.set("SetPreconditioner", true);
+  hypreList.set("NumFunctions", 10);
+  hypreList.set<RCP<FunctionParameter>*>("Functions", functs);
+  prec->setParameters(hypreList);
   prec->compute();
-
-  //
-  // Create the linear problem
-  //
-  RCP< Belos::LinearProblem<Scalar,MV,OP> > problem = rcp(new Belos::LinearProblem<Scalar,MV,OP>(A,X,B));
-  problem->setHermitian();
-  problem->setLeftPrec(prec);
-  problem->setProblem();
-
-  //
-  // Create the parameter list
-  //
-  RCP<ParameterList> belosList = rcp(new ParameterList());
-  belosList->set("Convergence Tolerance", tol);
-  if(verbose)
-    belosList->set("Verbosity", Belos::Errors + Belos::Warnings + Belos::TimingDetails + Belos::StatusTestDetails);
-  else
-    belosList->set("Verbosity", Belos::Errors + Belos::Warnings);
-
-  //
-  // Create the Belos linear solver
-  //
-  RCP< Belos::SolverManager<Scalar,MV,OP> > newSolver = rcp(new Belos::PseudoBlockCGSolMgr<Scalar,MV,OP>(problem,belosList));
 
   //
   // Perform solve
   //
-  newSolver->solve();
-
-  //
-  // Check the residual
-  //
-  RCP<MV> R = rcp(new MV(A->getRowMap(),1));
-  problem->computeCurrResVec(R.get(),X.get(),B.get());
-  std::vector<Scalar> normR(1), normB(1);
-  R->norm2(normR);
-  B->norm2(normB);
-  std::cout << "Relative residual: " << normR[0] / normB[0] << std::endl;
+  prec->apply(*B,*X);
   
 }

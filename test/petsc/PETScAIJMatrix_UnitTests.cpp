@@ -41,34 +41,19 @@
 // @HEADER
 */
 
-#ifdef HAVE_PETSC
+
+#include <Teuchos_CommHelpers.hpp>
+#include "Teuchos_UnitTestHarness.hpp"
+
 #include <Tpetra_ConfigDefs.hpp>
-#include <Tpetra_TestingUtilities.hpp>
 #include <Tpetra_PETScAIJMatrix.hpp>
 #include <Tpetra_MultiVector.hpp>
-#include <Teuchos_CommHelpers.hpp>
+#include "Tpetra_DefaultPlatform.hpp"
+#include "Tpetra_ETIHelperMacros.h"
 
 // TODO: add test where some nodes have zero rows
 // TODO: add test where non-"zero" graph is used to build matrix; if no values are added to matrix, the operator effect should be zero. This tests that matrix values are initialized properly.
 // TODO: add test where dynamic profile initially has no allocation, then entries are added. this will test new view functionality.
-
-namespace Teuchos {
-  template <>
-    ScalarTraits<int>::magnitudeType
-    relErr( const int &s1, const int &s2 )
-    {
-      typedef ScalarTraits<int> ST;
-      return ST::magnitude(s1-s2);
-    }
-
-  template <>
-    ScalarTraits<char>::magnitudeType
-    relErr( const char &s1, const char &s2 )
-    {
-      typedef ScalarTraits<char> ST;
-      return ST::magnitude(s1-s2);
-    }
-}
 
 namespace {
 
@@ -94,9 +79,6 @@ namespace {
     return TestingTolGuts<Scalar, Teuchos::ScalarTraits<Scalar>::hasMachineParameters>::
       testingTol();
   }
-
-  using Tpetra::TestingUtilities::getNode;
-  using Tpetra::TestingUtilities::getDefaultComm;
 
   using std::endl;
   using std::swap;
@@ -152,7 +134,6 @@ namespace {
   using Tpetra::createContigMapWithNode;
   using Tpetra::createLocalMapWithNode;
   using Tpetra::createVector;
-  using Tpetra::DefaultPlatform;
   using Tpetra::ProfileType;
   using Tpetra::StaticProfile;
   using Tpetra::DynamicProfile;
@@ -162,8 +143,6 @@ namespace {
   using Tpetra::GloballyDistributed;
   using Tpetra::INSERT;
 
-
-  double errorTolSlack = 1e+1;
   string filedir;
 
 template <class tuple, class T>
@@ -195,22 +174,6 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
   }
 
 
-  TEUCHOS_STATIC_SETUP()
-  {
-    Teuchos::CommandLineProcessor &clp = Teuchos::UnitTestRepository::getCLP();
-    clp.setOption(
-        "filedir",&filedir,"Directory of expected matrix files.");
-    clp.addOutputSetupOptions(true);
-    clp.setOption(
-        "test-mpi", "test-serial", &Tpetra::TestingUtilities::testMpi,
-        "Test MPI (if available) or force test of serial.  In a serial build,"
-        " this option is ignored and a serial comm is always used." );
-    clp.setOption(
-        "error-tol-slack", &errorTolSlack,
-        "Slack off of machine epsilon used to check test results" );
-  }
-
-
   //
   // UNIT TESTS
   //
@@ -218,7 +181,6 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
   ////
   TEUCHOS_UNIT_TEST_TEMPLATE_2_DECL( PETScAIJMatrix, BadCalls, GO, Node )
   {
-    RCP<Node> node = getNode<Node>();
     typedef PetscScalar Scalar;
     typedef int LO;
     typedef ScalarTraits<Scalar> ST;
@@ -230,14 +192,15 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
     const global_size_t INVALID = OrdinalTraits<global_size_t>::invalid();
     PetscErrorCode ierr;
     // get a comm
-    RCP<const Comm<int> > comm = getDefaultComm();
+    RCP<const Comm<int> > comm =
+          Tpetra::DefaultPlatform::getDefaultPlatform ().getComm ();
+    // get the node
+    RCP<Node> node = Tpetra::DefaultPlatform::getDefaultPlatform ().getNode ();
     // create a Map
     const size_t numLocal = 10;
     RCP<MAT> zero;
     {
       Mat A;
-      PetscInt Istart, Iend, Ii;
-      PetscScalar v;
       int argc = 0;
       char ** argv;
 
@@ -283,7 +246,6 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
   ////
   TEUCHOS_UNIT_TEST_TEMPLATE_2_DECL( PETScAIJMatrix, TheEyeOfTruth, GO, Node )
   {
-    RCP<Node> node = getNode<Node>();
     typedef PetscScalar Scalar;
     typedef int LO;
     typedef ScalarTraits<Scalar> ST;
@@ -294,9 +256,10 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
     const global_size_t INVALID = OrdinalTraits<global_size_t>::invalid();
     PetscErrorCode ierr;
     // get a comm
-    RCP<const Comm<int> > comm = getDefaultComm();
+    RCP<const Comm<int> > comm = Tpetra::DefaultPlatform::getDefaultPlatform ().getComm ();
+    // get the node
+    RCP<Node> node = Tpetra::DefaultPlatform::getDefaultPlatform ().getNode ();
     const size_t numImages = comm->getSize();
-    const size_t myImageID = comm->getRank();
     // create a Map
     const size_t numLocal = 10;
     const size_t numVecs  = 5;
@@ -369,7 +332,6 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
   ////
   TEUCHOS_UNIT_TEST_TEMPLATE_2_DECL( PETScAIJMatrix, SimpleEigTest, GO, Node )
   {
-    RCP<Node> node = getNode<Node>();
     typedef PetscScalar Scalar;
     typedef int LO;
     typedef PETScAIJMatrix<Scalar,LO,GO,Node> MAT;
@@ -381,9 +343,11 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
     const global_size_t INVALID = OrdinalTraits<global_size_t>::invalid();
     PetscErrorCode ierr;
     // get a comm
-    RCP<const Comm<int> > comm = getDefaultComm();
-    const size_t numImages = comm->getSize();
-    const size_t myImageID = comm->getRank();
+    RCP<const Comm<int> > comm = Tpetra::DefaultPlatform::getDefaultPlatform ().getComm ();
+    // get the node
+    RCP<Node> node = Tpetra::DefaultPlatform::getDefaultPlatform ().getNode ();
+    const PetscInt numImages = comm->getSize();
+    const PetscInt myImageID = comm->getRank();
     if (numImages < 2) return;
     // create a Map
     RCP<const Map<LO,GO,Node> > map = createContigMapWithNode<LO,GO>(INVALID,ONE,comm,node);
@@ -471,7 +435,6 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
   ////
   TEUCHOS_UNIT_TEST_TEMPLATE_2_DECL( PETScAIJMatrix, ZeroMatrix, GO, Node )
   {
-    RCP<Node> node = getNode<Node>();
     typedef PetscScalar Scalar;
     typedef int LO;
     typedef PETScAIJMatrix<Scalar,LO,GO,Node> MAT;
@@ -482,7 +445,9 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
     const global_size_t INVALID = OrdinalTraits<global_size_t>::invalid();
     PetscErrorCode ierr;
     // get a comm
-    RCP<const Comm<int> > comm = getDefaultComm();
+    RCP<const Comm<int> > comm = Tpetra::DefaultPlatform::getDefaultPlatform ().getComm ();
+    // get the node
+    RCP<Node> node = Tpetra::DefaultPlatform::getDefaultPlatform ().getNode ();
     // create a Map
     const size_t numLocal = 10;
     const size_t numVecs  = 5;
@@ -491,8 +456,6 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
     RCP<MAT> zero;
     {
       Mat A;
-      PetscInt Istart, Iend, Ii;
-      PetscScalar v;
       int argc = 0;
       char ** argv;
 
@@ -530,7 +493,6 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
   ////
   TEUCHOS_UNIT_TEST_TEMPLATE_2_DECL( PETScAIJMatrix, FullMatrixTriDiag, GO, Node )
   {
-    RCP<Node> node = getNode<Node>();
     typedef PetscScalar Scalar;
     typedef int LO;
     // do a FEM-type communication, then apply to a MultiVector containing the identity
@@ -544,9 +506,11 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
     const global_size_t INVALID = OrdinalTraits<global_size_t>::invalid();
     PetscErrorCode ierr;
     // get a comm
-    RCP<const Comm<int> > comm = getDefaultComm();
-    const size_t numImages = comm->getSize();
-    const size_t myImageID = comm->getRank();
+    RCP<const Comm<int> > comm = Tpetra::DefaultPlatform::getDefaultPlatform ().getComm ();
+    // get the node
+    RCP<Node> node = Tpetra::DefaultPlatform::getDefaultPlatform ().getNode ();
+    const PetscInt numImages = comm->getSize();
+    const PetscInt myImageID = comm->getRank();
     if (numImages < 3) return;
     // create a Map
     RCP<const Map<LO,GO,Node> > map = createContigMapWithNode<LO,GO>(INVALID,ONE,comm,node);
@@ -651,7 +615,6 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
   ////
   TEUCHOS_UNIT_TEST_TEMPLATE_2_DECL( PETScAIJMatrix, CopiesAndViews, GO, Node )
   {
-    RCP<Node> node = getNode<Node>();
     typedef PetscScalar Scalar;
     typedef int LO;
     // test that an exception is thrown when we exceed statically allocated memory
@@ -660,9 +623,11 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
     const global_size_t INVALID = OrdinalTraits<global_size_t>::invalid();
     PetscErrorCode ierr;
     // get a comm
-    RCP<const Comm<int> > comm = getDefaultComm();
-    const size_t numImages = size(*comm);
-    const size_t myImageID = rank(*comm);
+    RCP<const Comm<int> > comm = Tpetra::DefaultPlatform::getDefaultPlatform ().getComm ();
+    // get the node
+    RCP<Node> node = Tpetra::DefaultPlatform::getDefaultPlatform ().getNode ();
+    const PetscInt numImages = size(*comm);
+    const PetscInt myImageID = rank(*comm);
     if (numImages < 2) return;
     // create a Map, one row per processor
     const size_t numLocal = 1;
@@ -754,7 +719,6 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
   ////
   TEUCHOS_UNIT_TEST_TEMPLATE_2_DECL( PETScAIJMatrix, AlphaBetaMultiply, GO, Node )
   {
-    RCP<Node> node = getNode<Node>();
     typedef PetscScalar Scalar;
     typedef int LO;
     typedef PETScAIJMatrix<Scalar,LO,GO,Node> MAT;
@@ -766,8 +730,9 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
     const global_size_t INVALID = OrdinalTraits<global_size_t>::invalid();
     PetscErrorCode ierr;
     // get a comm
-    RCP<const Comm<int> > comm = getDefaultComm();
-    const size_t myImageID = comm->getRank();
+    RCP<const Comm<int> > comm = Tpetra::DefaultPlatform::getDefaultPlatform ().getComm ();
+    // get the node
+    RCP<Node> node = Tpetra::DefaultPlatform::getDefaultPlatform ().getNode ();
     // create a Map
     RCP<const Map<LO,GO,Node> > map = createContigMapWithNode<LO,GO>(INVALID,THREE,comm,node);
 
@@ -869,5 +834,3 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
   TPETRA_INSTANTIATE_N( UNIT_TEST_GROUP )
 
 }
-
-#endif

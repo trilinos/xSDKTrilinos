@@ -180,7 +180,6 @@ int main(int argc, char *argv[]) {
   ParameterList hypreList;
   hypreList.set("SolveOrPrecondition", Prec);
   hypreList.set("Preconditioner", Ifpack2::Hypre::BoomerAMG);
-  hypreList.set("SetPreconditioner", true);
   hypreList.set("NumFunctions", 6);
   hypreList.set<RCP<FunctionParameter>*>("Functions", functs);
   prec->setParameters(hypreList);

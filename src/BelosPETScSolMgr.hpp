@@ -634,7 +634,7 @@ ReturnType PETScSolMgr<ScalarType,MV,OP>::solve()
   }
 
   // Give the Trilinos matrix to the PETSc solver
-  ierr = KSPSetOperators(solver,petscA,petscA);
+  ierr = KSPSetOperators(solver,petscA,petscA); CHKERRCONTINUE(ierr);
 
   // PETSc is currently only capable of handling single right hand sides,
   // so we will loop over all of them one at a time

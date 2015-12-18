@@ -90,9 +90,9 @@ Teuchos::RCP<Tpetra::CrsMatrix<Scalar,LO,GO,Node> > deepCopyPETScAIJMatrixToTpet
   // Get information about the distribution from PETSc
   // Note that this is only valid for a block row distribution
   PetscInt numLocalRows, numLocalCols;
-  ierr = MatGetLocalSize(A,&numLocalRows,&numLocalCols);
+  ierr = MatGetLocalSize(A,&numLocalRows,&numLocalCols); CHKERRCONTINUE(ierr);
   PetscInt numGlobalRows, numGlobalCols;
-  ierr = MatGetSize(A,&numGlobalRows,&numGlobalCols);
+  ierr = MatGetSize(A,&numGlobalRows,&numGlobalCols); CHKERRCONTINUE(ierr);
 
   // Create a Tpetra map reflecting this distribution
   RCP<Map> map = rcp(new Map(numGlobalRows,numLocalRows,0,TrilinosComm));
@@ -102,9 +102,9 @@ Teuchos::RCP<Tpetra::CrsMatrix<Scalar,LO,GO,Node> > deepCopyPETScAIJMatrixToTpet
   Teuchos::ArrayRCP<size_t> ncolsPerRow(numLocalRows);
   for(int i=0; i < numLocalRows; i++)
   {
-    ierr = MatGetRow(A,minLocalIndex+i,&numLocalCols,NULL,NULL);
+    ierr = MatGetRow(A,minLocalIndex+i,&numLocalCols,NULL,NULL); CHKERRCONTINUE(ierr);
     ncolsPerRow[i] = numLocalCols;
-    ierr = MatRestoreRow(A,minLocalIndex+i,&numLocalCols,NULL,NULL);
+    ierr = MatRestoreRow(A,minLocalIndex+i,&numLocalCols,NULL,NULL); CHKERRCONTINUE(ierr);
   }
 
   // Create the matrix and set its values
@@ -113,11 +113,11 @@ Teuchos::RCP<Tpetra::CrsMatrix<Scalar,LO,GO,Node> > deepCopyPETScAIJMatrixToTpet
   const PetscScalar * vals;
   for(int i=0; i < numLocalRows; i++)
   {
-    ierr = MatGetRow(A,i+minLocalIndex,&numLocalCols,&cols,&vals);
+    ierr = MatGetRow(A,i+minLocalIndex,&numLocalCols,&cols,&vals); CHKERRCONTINUE(ierr);
     Teuchos::ArrayView<const LO> colsToInsert(cols,numLocalCols);
     Teuchos::ArrayView<const Scalar> valsToInsert(vals,numLocalCols);
     TrilinosMat->insertGlobalValues(minLocalIndex+i,colsToInsert,valsToInsert);
-    ierr = MatRestoreRow(A,minLocalIndex+i,&numLocalCols,&cols,&vals);
+    ierr = MatRestoreRow(A,minLocalIndex+i,&numLocalCols,&cols,&vals); CHKERRCONTINUE(ierr);
   }
 
   // Let the matrix know you're done changing it

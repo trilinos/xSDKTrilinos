@@ -1,3 +1,5 @@
-
-
+/* Define if want to build with ETI */
 #cmakedefine xSDKTrilinos_ETI
+
+/* Define if want to build with Amesos enabled */
+#cmakedefine HAVE_XSDKTRILINOS_EPETRA

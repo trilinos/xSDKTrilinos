@@ -6,18 +6,23 @@ SET(example_MueLu_SOURCES PETSc_MueLuEx.cpp)
 SET(example_TpetraKSP_SOURCES Tpetra_KSPEx.cpp)
 SET(example_EpetraKSP_SOURCES Epetra_KSPEx.cpp)
 
-
+ASSERT_DEFINED(${PACKAGE_NAME}_ENABLE_Amesos2)
+IF (${PACKAGE_NAME}_ENABLE_Amesos2)
 TRIBITS_ADD_EXECUTABLE(
   PETSc_Amesos2_example
   SOURCES ${example_Amesos2_SOURCES}
   COMM serial mpi
   )
+ENDIF (${PACKAGE_NAME}_ENABLE_Amesos2)
 
+ASSERT_DEFINED(${PACKAGE_NAME}_ENABLE_Anasazi)
+IF (${PACKAGE_NAME}_ENABLE_Anasazi)
 TRIBITS_ADD_EXECUTABLE(
   PETSc_Anasazi_example
   SOURCES ${example_Anasazi_SOURCES}
   COMM serial mpi
   )
+ENDIF (${PACKAGE_NAME}_ENABLE_Anasazi)
   
 TRIBITS_ADD_EXECUTABLE(
   PETSc_Ifpack2_example
@@ -25,11 +30,14 @@ TRIBITS_ADD_EXECUTABLE(
   COMM serial mpi
   )
   
+ASSERT_DEFINED(${PACKAGE_NAME}_ENABLE_MueLu)
+IF (${PACKAGE_NAME}_ENABLE_MueLu)
 TRIBITS_ADD_EXECUTABLE(
   PETSc_MueLu_example
   SOURCES ${example_MueLu_SOURCES}
   COMM serial mpi
   )
+ENDIF(${PACKAGE_NAME}_ENABLE_MueLu)
 
 TRIBITS_ADD_EXECUTABLE(
   example_TpetraKSP
@@ -37,9 +45,12 @@ TRIBITS_ADD_EXECUTABLE(
   COMM serial mpi
   ) 
 
+ASSERT_DEFINED(${PACKAGE_NAME}_ENABLE_Epetra)
+IF (${PACKAGE_NAME}_ENABLE_Epetra)
 TRIBITS_ADD_EXECUTABLE(
   example_EpetraKSP
   SOURCES ${example_EpetraKSP_SOURCES}
   COMM serial mpi
   )
+ENDIF(${PACKAGE_NAME}_ENABLE_Epetra)
                             

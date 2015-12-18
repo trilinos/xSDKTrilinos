@@ -52,7 +52,7 @@
 #define _TPETRA_PETSCAIJMATRIX_H_
 
 #include "Tpetra_ConfigDefs.hpp"
-#include "Tpetra_RowMatrix.hpp"
+#include "Tpetra_CrsMatrix.hpp"
 #include "Tpetra_PETScAIJGraph.hpp"
 #ifdef HAVE_MPI
 #include "Teuchos_DefaultMpiComm.hpp"
@@ -65,6 +65,68 @@
 //      to the header below plus the PETSc home directory.
 #include "src/mat/impls/aij/mpi/mpiaij.h"
 #include <type_traits>
+
+
+namespace xSDKTrilinos {
+template<class Scalar, class LO, class GO, class Node>
+Teuchos::RCP<Tpetra::CrsMatrix<Scalar,LO,GO,Node> > deepCopyPETScAIJMatrixToTpetraCrsMatrix(Mat A)
+{
+  using Teuchos::RCP;
+  typedef Tpetra::Map<LO,GO,Node>                   Map;
+  typedef Tpetra::CrsMatrix<Scalar,LO,GO,Node>      CrsMatrix;
+
+  PetscErrorCode ierr;
+
+  // Get the communicator
+  RCP< Teuchos::Comm<int> > TrilinosComm;
+#ifdef HAVE_MPI
+  MPI_Comm PETScComm;
+  PetscObjectGetComm( (PetscObject)A, &PETScComm);
+  TrilinosComm = rcp(new Teuchos::MpiComm<int>(PETScComm));
+#else
+  TrilinosComm = rcp(new Teuchos::SerialComm<int>());
+#endif
+
+  // Get information about the distribution from PETSc
+  // Note that this is only valid for a block row distribution
+  PetscInt numLocalRows, numLocalCols;
+  ierr = MatGetLocalSize(A,&numLocalRows,&numLocalCols);
+  PetscInt numGlobalRows, numGlobalCols;
+  ierr = MatGetSize(A,&numGlobalRows,&numGlobalCols);
+
+  // Create a Tpetra map reflecting this distribution
+  RCP<Map> map = rcp(new Map(numGlobalRows,numLocalRows,0,TrilinosComm));
+
+  // Create an array containing the number of entries in each row
+  LO minLocalIndex = map->getMinGlobalIndex();
+  Teuchos::ArrayRCP<size_t> ncolsPerRow(numLocalRows);
+  for(int i=0; i < numLocalRows; i++)
+  {
+    ierr = MatGetRow(A,minLocalIndex+i,&numLocalCols,NULL,NULL);
+    ncolsPerRow[i] = numLocalCols;
+    ierr = MatRestoreRow(A,minLocalIndex+i,&numLocalCols,NULL,NULL);
+  }
+
+  // Create the matrix and set its values
+  RCP<CrsMatrix> TrilinosMat = rcp(new CrsMatrix(map,ncolsPerRow,Tpetra::StaticProfile));
+  const PetscInt * cols;
+  const PetscScalar * vals;
+  for(int i=0; i < numLocalRows; i++)
+  {
+    ierr = MatGetRow(A,i+minLocalIndex,&numLocalCols,&cols,&vals);
+    Teuchos::ArrayView<const LO> colsToInsert(cols,numLocalCols);
+    Teuchos::ArrayView<const Scalar> valsToInsert(vals,numLocalCols);
+    TrilinosMat->insertGlobalValues(minLocalIndex+i,colsToInsert,valsToInsert);
+    ierr = MatRestoreRow(A,minLocalIndex+i,&numLocalCols,&cols,&vals);
+  }
+
+  // Let the matrix know you're done changing it
+  TrilinosMat->fillComplete();
+
+  return TrilinosMat;
+}
+
+}
 
 
 namespace Tpetra {

@@ -30,20 +30,20 @@
   using Teuchos::rcp;
   using Teuchos::ArrayView;
 
-  typedef Tpetra::PETScAIJMatrix<>                  PETScAIJMatrix;
-  typedef PETScAIJMatrix::scalar_type               Scalar;
-  typedef PETScAIJMatrix::local_ordinal_type        LO;
-  typedef PETScAIJMatrix::global_ordinal_type       GO;
-  typedef PETScAIJMatrix::node_type                 Node;
-  typedef Tpetra::CrsMatrix<Scalar,LO,GO,Node>      CrsMatrix;
-  typedef Tpetra::Vector<Scalar,LO,GO,Node>         Vector;
-  typedef MueLu::TpetraOperator<Scalar,LO,GO,Node>  MueLuOp;
-  typedef Tpetra::Map<LO,GO,Node>                   Map;
-  typedef Tpetra::Operator<Scalar,LO,GO,Node>       OP;
-  typedef Tpetra::MultiVector<Scalar,LO,GO,Node>    MV;
-  typedef Tpetra::Vector<Scalar,LO,GO,Node>         Vector;
-  typedef Belos::LinearProblem<Scalar,MV,OP>        LP;
-  typedef Belos::PseudoBlockCGSolMgr<Scalar,MV,OP>  SolMgr;
+  typedef Tpetra::PETScAIJMatrix<>                                         PETScAIJMatrix;
+  typedef PETScAIJMatrix::scalar_type                                      Scalar;
+  typedef PETScAIJMatrix::local_ordinal_type                               LO;
+  typedef PETScAIJMatrix::global_ordinal_type                              GO;
+  typedef PETScAIJMatrix::node_type                                        Node;
+  typedef Tpetra::CrsMatrix<Scalar,LO,GO,Node>                             CrsMatrix;
+  typedef Tpetra::Vector<Scalar,LO,GO,Node>                                Vector;
+  typedef MueLu::TpetraOperator<Scalar,LO,GO,Node>                         MueLuOp;
+  typedef Tpetra::Map<LO,GO,Node>                                          Map;
+  typedef Tpetra::Operator<Scalar,LO,GO,Node>                              OP;
+  typedef Tpetra::MultiVector<Scalar,LO,GO,Node>                           MV;
+  typedef Tpetra::Vector<Scalar,LO,GO,Node>                                Vector;
+  typedef Belos::LinearProblem<Scalar,MV,OP>                               LP;
+  typedef Belos::PseudoBlockCGSolMgr<Scalar,MV,OP>                         SolMgr;
 
 /* 
    This example demonstrates how to apply a Trilinos preconditioner to a PETSc
@@ -73,8 +73,6 @@ Input parameters include:\n\
   -view_exact_sol   : write exact solution vector to stdout\n\
   -m <mesh_x>       : number of mesh points in x-direction\n\
   -n <mesh_n>       : number of mesh points in y-direction\n\n";
-
-RCP<CrsMatrix> PETScAIJMatrixToTpetraCrsMatrix(Mat A);
 
 extern PetscErrorCode ShellApplyML(PC,Vec,Vec);
 
@@ -128,7 +126,7 @@ int main(int argc,char **args)
   /* Wrap the PETSc matrix as a Tpetra_PETScAIJMatrix. This is lightweight,
      i.e., no deep data copies. */
 //  RCP<PETScAIJMatrix> epA = rcp(new PETScAIJMatrix(A));
-  RCP<CrsMatrix> epA = PETScAIJMatrixToTpetraCrsMatrix(A);
+  RCP<CrsMatrix> epA = xSDKTrilinos::deepCopyPETScAIJMatrixToTpetraCrsMatrix<Scalar,LO,GO,Node>(A);
 
   std::cout << "isLocallyIndexed: " << epA->isLocallyIndexed() << std::endl;
   std::cout << "isGloballyIndexed: " << epA->isGloballyIndexed() << std::endl;
@@ -275,59 +273,6 @@ int main(int argc,char **args)
 } /*main*/
 
 /* ***************************************************************** */
-
-RCP<CrsMatrix> PETScAIJMatrixToTpetraCrsMatrix(Mat A)
-{
-  PetscErrorCode ierr;
-
-  // Get the communicator
-  RCP< Teuchos::Comm<int> > TrilinosComm;
-#ifdef HAVE_MPI
-  MPI_Comm PETScComm;
-  PetscObjectGetComm( (PetscObject)A, &PETScComm);
-  TrilinosComm = rcp(new Teuchos::MpiComm<int>(PETScComm));
-#else
-  TrilinosComm = rcp(new Teuchos::SerialComm<int>());
-#endif 
-
-  // Get information about the distribution from PETSc
-  // Note that this is only valid for a block row distribution
-  PetscInt numLocalRows, numLocalCols;
-  ierr = MatGetLocalSize(A,&numLocalRows,&numLocalCols);
-  PetscInt numGlobalRows, numGlobalCols;
-  ierr = MatGetSize(A,&numGlobalRows,&numGlobalCols);
-
-  // Create a Tpetra map reflecting this distribution
-  RCP<Map> map = rcp(new Map(numGlobalRows,numLocalRows,0,TrilinosComm));
-
-  // Create an array containing the number of entries in each row
-  LO minLocalIndex = map->getMinGlobalIndex();
-  Teuchos::ArrayRCP<size_t> ncolsPerRow(numLocalRows);
-  for(int i=0; i < numLocalRows; i++)
-  {
-    ierr = MatGetRow(A,minLocalIndex+i,&numLocalCols,NULL,NULL);
-    ncolsPerRow[i] = numLocalCols;
-    ierr = MatRestoreRow(A,minLocalIndex+i,&numLocalCols,NULL,NULL);
-  }
-
-  // Create the matrix and set its values
-  RCP<CrsMatrix> TrilinosMat = rcp(new CrsMatrix(map,ncolsPerRow,Tpetra::StaticProfile));
-  const PetscInt * cols;
-  const PetscScalar * vals;
-  for(int i=0; i < numLocalRows; i++)
-  {
-    ierr = MatGetRow(A,i+minLocalIndex,&numLocalCols,&cols,&vals);
-    Teuchos::ArrayView<const LO> colsToInsert(cols,numLocalCols);
-    Teuchos::ArrayView<const Scalar> valsToInsert(vals,numLocalCols);
-    TrilinosMat->insertGlobalValues(minLocalIndex+i,colsToInsert,valsToInsert);
-    ierr = MatRestoreRow(A,minLocalIndex+i,&numLocalCols,&cols,&vals);
-  }
-
-  // Let the matrix know you're done changing it
-  TrilinosMat->fillComplete();
-
-  return TrilinosMat;
-}
 
 PetscErrorCode ShellApplyML(PC pc,Vec x,Vec y)
 {

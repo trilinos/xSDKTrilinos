@@ -65,8 +65,6 @@ Input parameters include:\n\
   -m <mesh_x>       : number of mesh points in x-direction\n\
   -n <mesh_n>       : number of mesh points in y-direction\n\n";
 
-RCP<CrsMatrix> PETScAIJMatrixToTpetraCrsMatrix(Mat A);
-
 #undef __FUNCT__
 #define __FUNCT__ "main"
 int main(int argc,char **args)
@@ -111,7 +109,7 @@ int main(int argc,char **args)
   ierr = MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
   ierr = MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
 
-  RCP<CrsMatrix> epA = PETScAIJMatrixToTpetraCrsMatrix(A);
+  RCP<CrsMatrix> epA = xSDKTrilinos::deepCopyPETScAIJMatrixToTpetraCrsMatrix<Scalar,LO,GO,Node>(A);
 
   ierr = VecCreate(PETSC_COMM_WORLD,&u);CHKERRQ(ierr);
   ierr = VecSetSizes(u,PETSC_DECIDE,m*n);CHKERRQ(ierr);
@@ -164,56 +162,3 @@ int main(int argc,char **args)
 } /*main*/
 
 /* ***************************************************************** */
-
-RCP<CrsMatrix> PETScAIJMatrixToTpetraCrsMatrix(Mat A)
-{
-  PetscErrorCode ierr;
-
-  // Get the communicator
-  RCP< Teuchos::Comm<int> > TrilinosComm;
-#ifdef HAVE_MPI
-  MPI_Comm PETScComm;
-  PetscObjectGetComm( (PetscObject)A, &PETScComm);
-  TrilinosComm = rcp(new Teuchos::MpiComm<int>(PETScComm));
-#else
-  TrilinosComm = rcp(new Teuchos::SerialComm<int>());
-#endif
-
-  // Get information about the distribution from PETSc
-  // Note that this is only valid for a block row distribution
-  PetscInt numLocalRows, numLocalCols;
-  ierr = MatGetLocalSize(A,&numLocalRows,&numLocalCols); CHKERRCONTINUE(ierr);
-  PetscInt numGlobalRows, numGlobalCols;
-  ierr = MatGetSize(A,&numGlobalRows,&numGlobalCols); CHKERRCONTINUE(ierr);
-
-  // Create a Tpetra map reflecting this distribution
-  RCP<Map> map = rcp(new Map(numGlobalRows,numLocalRows,0,TrilinosComm));
-
-  // Create an array containing the number of entries in each row
-  LO minLocalIndex = map->getMinGlobalIndex();
-  Teuchos::ArrayRCP<size_t> ncolsPerRow(numLocalRows);
-  for(int i=0; i < numLocalRows; i++)
-  {
-    ierr = MatGetRow(A,minLocalIndex+i,&numLocalCols,NULL,NULL); CHKERRCONTINUE(ierr);
-    ncolsPerRow[i] = numLocalCols;
-    ierr = MatRestoreRow(A,minLocalIndex+i,&numLocalCols,NULL,NULL); CHKERRCONTINUE(ierr);
-  }
-
-  // Create the matrix and set its values
-  RCP<CrsMatrix> TrilinosMat = rcp(new CrsMatrix(map,ncolsPerRow,Tpetra::StaticProfile));
-  const PetscInt * cols;
-  const PetscScalar * vals;
-  for(int i=0; i < numLocalRows; i++)
-  {
-    ierr = MatGetRow(A,i+minLocalIndex,&numLocalCols,&cols,&vals); CHKERRCONTINUE(ierr);
-    Teuchos::ArrayView<const LO> colsToInsert(cols,numLocalCols);
-    Teuchos::ArrayView<const Scalar> valsToInsert(vals,numLocalCols);
-    TrilinosMat->insertGlobalValues(minLocalIndex+i,colsToInsert,valsToInsert);
-    ierr = MatRestoreRow(A,minLocalIndex+i,&numLocalCols,&cols,&vals); CHKERRCONTINUE(ierr);
-  }
-
-  // Let the matrix know you're done changing it
-  TrilinosMat->fillComplete();
-
-  return TrilinosMat;
-}

@@ -1,0 +1,75 @@
+#!/bin/bash
+#
+
+TRILINOS_HOME=/home/amklinv/TrilinosDir/Trilinos
+PETSC_DIR=/home/amklinv/PETSc/petsc-3.6.0
+PETSC_ARCH=arch-linux2-cxx-debug
+PETSC_LIB="-Wl,-rpath,/home/amklinv/PETSc/petsc-3.6.0/arch-linux2-cxx-debug/lib -L/home/amklinv/PETSc/petsc-3.6.0/arch-linux2-cxx-debug/lib -lpetsc -Wl,-rpath,/home/amklinv/PETSc/petsc_install/lib -L/home/amklinv/PETSc/petsc_install/lib -lsuperlu_4.3 -lsuperlu_dist_4.0 -lHYPRE -Wl,-rpath,/home/amklinv/lapack-3.5.0 -L/home/amklinv/lapack-3.5.0 -llapack -lrefblas -lparmetis -lmetis -L/projects/install/rhel6-x86_64/sems/compiler/gcc/4.7.2/openmpi/1.6.5/lib -L/projects/install/rhel6-x86_64/sems/compiler/gcc/4.7.2/base/lib/gcc/x86_64-unknown-linux-gnu/4.7.2 -L/projects/install/rhel6-x86_64/sems/compiler/gcc/4.7.2/base/lib64 -L/projects/install/rhel6-x86_64/sems/compiler/gcc/4.7.2/base/lib -lmpi_f90 -lmpi_f77 -lgfortran -lm -lgfortran -lm -lgfortran -lm -lgfortran -lm -lquadmath -lm -lmpi_cxx -lstdc++ -L/projects/install/rhel6-x86_64/sems/compiler/gcc/4.7.2/openmpi/1.6.5/lib -L/projects/install/rhel6-x86_64/sems/compiler/gcc/4.7.2/base/lib/gcc/x86_64-unknown-linux-gnu/4.7.2 -L/projects/install/rhel6-x86_64/sems/compiler/gcc/4.7.2/base/lib64 -L/projects/install/rhel6-x86_64/sems/compiler/gcc/4.7.2/base/lib -ldl -lmpi -lrt -lnsl -lutil -lgcc_s -lpthread -ldl"
+
+PETSC_INCLUDE_PATH="${PETSC_DIR}/${PETSC_ARCH}/include;${PETSC_DIR}/include;${PETSC_DIR}"
+
+HYPRE_LIBRARY_DIRS="/home/amklinv/PETSc/petsc-3.6.0/arch-linux2-cxx-debug/externalpackages/hypre-2.10.0b-p1/src/hypre/lib"
+HYPRE_INCLUDE_DIRS="/home/amklinv/PETSc/petsc-3.6.0/arch-linux2-cxx-debug/externalpackages/hypre-2.10.0b-p1/src/hypre/include"
+
+rm -rf CMakeFiles CMakeCache.txt
+
+cmake \
+  -D CMAKE_BUILD_TYPE=DEBUG \
+  -D Trilinos_ENABLE_STRONG_C_COMPILE_WARNINGS:BOOL=OFF \
+  -D CMAKE_INSTALL_PREFIX:PATH="/home/amklinv/TrilinosDir\trilinos-install" \
+  -D TPL_ENABLE_MPI:BOOL=ON \
+  -D Trilinos_ENABLE_EXPLICIT_INSTANTIATION:BOOL=ON \
+  -D Trilinos_ENABLE_ALL_OPTIONAL_PACKAGES:BOOL=OFF \
+  -D Trilinos_ENABLE_Amesos:BOOL=ON \
+  -D Trilinos_ENABLE_Amesos2:BOOL=ON \
+  -D Trilinos_ENABLE_Anasazi:BOOL=ON \
+  -D Trilinos_ENABLE_AztecOO:BOOL=ON \
+  -D Trilinos_ENABLE_Belos:BOOL=ON \
+  -D Trilinos_ENABLE_Epetra:BOOL=ON \
+  -D Trilinos_ENABLE_EpetraExt:BOOL=ON \
+  -D Trilinos_ENABLE_Galeri:BOOL=ON \
+  -D Trilinos_ENABLE_Ifpack:BOOL=ON \
+  -D Trilinos_ENABLE_Ifpack2:BOOL=ON \
+  -D Trilinos_ENABLE_Isorropia:BOOL=ON \
+  -D Trilinos_ENABLE_Kokkos:BOOL=ON \
+  -D Trilinos_ENABLE_ML:BOOL=ON \
+  -D Trilinos_ENABLE_Tpetra:BOOL=ON \
+  -D Trilinos_ENABLE_TrilinosCouplings:BOOL=ON \
+  -D Trilinos_ENABLE_Triutils:BOOL=ON \
+  -D Trilinos_ENABLE_NOX:BOOL=ON \
+  -D Trilinos_ENABLE_Zoltan:BOOL=ON \
+  -D Trilinos_ENABLE_Zoltan2:BOOL=ON \
+\
+  -D EpetraExt_USING_PETSC:BOOL=ON \
+  -D NOX_ENABLE_PETSC:BOOL=ON \
+  -D NOX_ENABLE_ABSTRACT_IMPLEMENTATION_PETSC:BOOL=ON \
+  -D TPL_ENABLE_PETSC:BOOL=ON \
+  -D PETSC_LIBRARY_DIRS:FILEPATH="${PETSC_LIB}" \
+  -D PETSC_INCLUDE_DIRS:FILEPATH="${PETSC_INCLUDE_PATH}" \
+  -D TPL_PETSC_LIBRARIES:STRING="${PETSC_LIB}" \
+  -D TPL_PETSC_INCLUDE_DIRS:STRING="${PETSC_INCLUDE_PATH}" \
+\
+  -D Amesos2_ENABLE_KLU2::BOOL=ON \
+\
+  -D EpetraExt_ENABLE_HYPRE:BOOL=ON \
+  -D Ifpack_ENABLE_HYPRE:BOOL=ON \
+  -D TPL_ENABLE_HYPRE:BOOL=ON \
+  -D HYPRE_LIBRARY_DIRS:FILEPATH="${HYPRE_LIBRARY_DIRS}" \
+  -D HYPRE_INCLUDE_DIRS:FILEPATH="${HYPRE_INCLUDE_DIRS}" \
+\
+  -D Belos_ENABLE_TESTS:BOOL=ON \
+  -D Belos_ENABLE_EXAMPLES:BOOL=ON \
+  -D Ifpack2_ENABLE_TESTS:BOOL=ON \
+  -D Ifpack2_ENABLE_EXAMPLES:BOOL=ON \
+  -D DART_TESTING_TIMEOUT:STRING=300 \
+  -D BLAS_LIBRARY_NAMES:STRING="libf77blas.so.3" \
+  -D BLAS_LIBRARY_DIRS:PATH="/usr/lib64/atlas" \
+  -D LAPACK_LIBRARY_NAMES:STRING="liblapack.so.3" \
+  -D LAPACK_LIBRARY_DIRS:PATH="/usr/lib64/atlas" \
+\
+  -D Trilinos_EXTRA_REPOSITORIES:STRING=preCopyrightTrilinos \
+  -D Trilinos_ENABLE_xSDKTrilinos:BOOL=ON \
+  -D xSDKTrilinos_USING_PETSC:BOOL=ON \
+  -D xSDKTrilinos_USING_HYPRE:BOOL=ON \
+\
+  ${TRILINOS_HOME}

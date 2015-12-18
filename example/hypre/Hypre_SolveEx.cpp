@@ -92,7 +92,6 @@ int main(int argc, char *argv[]) {
   Platform &platform = Tpetra::DefaultPlatform::getDefaultPlatform();
   RCP<const Teuchos::Comm<int> > comm = platform.getComm();
   RCP<Node> node = platform.getNode();
-  int rank = comm->getRank();
 
   //
   // Get parameters from command-line processor

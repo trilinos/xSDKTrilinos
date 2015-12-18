@@ -54,13 +54,17 @@
 #include "BelosOutputManager.hpp"
 #include "BelosSolverManager.hpp"
 
-#include "Epetra_DataAccess.h"
-#include "Epetra_MultiVector.h"
+#ifdef HAVE_XSDKTRILINOS_EPETRA
+  #include "Epetra_DataAccess.h"
+  #include "Epetra_MultiVector.h"
+#endif
 #include "Tpetra_MultiVector.hpp"
 
 #ifdef HAVE_MPI
 #include "Teuchos_DefaultMpiComm.hpp"
-#include "Epetra_MpiComm.h"
+#ifdef HAVE_XSDKTRILINOS_EPETRA
+  #include "Epetra_MpiComm.h"
+#endif
 #else
 #include "Teuchos_DefaultSerialComm.hpp"
 #endif
@@ -146,6 +150,7 @@ public:
 
 
 // Partial specialization for Epetra
+#ifdef HAVE_XSDKTRILINOS_EPETRA
 template<class ScalarType, class OP>
 class PETScSolMgrHelper<ScalarType,Epetra_MultiVector,OP> {
 private:
@@ -173,6 +178,7 @@ public:
   static void unwrapVector(ScalarType* x, Teuchos::RCP<MV> trilinosX)
   { } // Since we didn't copy any data, this doesn't have to do anything
 };
+#endif
 
 
 template<class ScalarType, class MV, class OP>

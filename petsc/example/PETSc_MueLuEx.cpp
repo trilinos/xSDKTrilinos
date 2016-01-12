@@ -1,23 +1,21 @@
-// This needs to be here; I don't know why.
+/*
+   This example demonstrates how to apply a Trilinos preconditioner to a PETSc
+   linear system.
 
-#ifdef HAVE_MUELU_GALER
-#include <Galeri_XpetraParameters.hpp>
-#include <Galeri_XpetraProblemFactory.hpp>
-#include <Galeri_XpetraUtils.hpp>
-#include <Galeri_XpetraMaps.hpp>
-#endif
+   The PETSc matrix is a 2D 5-point Laplace operator stored in AIJ format.
+   This matrix is wrapped as an Epetra_PETScAIJMatrix, and a MueLu AMG
+   preconditioner is created for it.  The associated linear system is solved twice,
+   the first time using Belos's preconditioned CG, the second time using PETSc's.
+
+   To invoke this example, use something like:
+
+       mpirun -np 5 ./PETSc_MueLu_example.exe -mx 150 -my 150 -petsc_smoother -ksp_monitor_true_residual
+*/
 
 // This needs to be here; I can guess why.
-#include <MueLu.hpp>
-#include <MueLu_ParameterListInterpreter.hpp>
-#ifdef HAVE_MUELU_TPETRA
-#  include <MueLu_CreateTpetraPreconditioner.hpp>
-#else
-#  error "This example requires that Tpetra be enabled in MueLu."
-#endif
+#include "MueLu_CreateTpetraPreconditioner.hpp"
 
 // Put these below all the stuff above, because MueLu is weird.
-#include "ml_MultiLevelPreconditioner.h"
 #include "petscksp.h"
 #include "Tpetra_ConfigDefs.hpp"
 #include "Tpetra_PETScAIJMatrix.hpp"
@@ -26,6 +24,8 @@
 #include "BelosPseudoBlockCGSolMgr.hpp"
 #include "BelosTpetraAdapter.hpp"
 
+int main(int argc,char **args)
+{
   using Teuchos::RCP;
   using Teuchos::rcp;
   using Teuchos::ArrayView;
@@ -45,69 +45,37 @@
   typedef Belos::LinearProblem<Scalar,MV,OP>                               LP;
   typedef Belos::PseudoBlockCGSolMgr<Scalar,MV,OP>                         SolMgr;
 
-/* 
-   This example demonstrates how to apply a Trilinos preconditioner to a PETSc
-   linear system.
-
-   For information on configuring and building Trilinos with the PETSc aij
-   interface enabled, please see EpetraExt's doxygen documentation at
-   http://trilinos.sandia.gov/packages/epetraext, development version
-   or release 9.0 or later.
-
-   The PETSc matrix is a 2D 5-point Laplace operator stored in AIJ format.
-   This matrix is wrapped as an Epetra_PETScAIJMatrix, and an ML AMG
-   preconditioner is created for it.  The associated linear system is solved twice,
-   the first time using AztecOO's preconditioned CG, the second time using PETSc's.
-
-   To invoke this example, use something like:
-
-       mpirun -np 5 ./binary.exe -m 150 -n 150 -petsc_smoother -ksp_monitor_true_residual
-*/
-
-static char help[] = "Demonstrates how to solve a PETSc linear system with KSP\
-and a Trilinos AMG preconditioner.  In particular, it shows how to wrap a PETSc\
-AIJ matrix as a Tpetra matrix, create the AMG preconditioner, and wrap it as a\
-shell preconditioner for a PETSc Krylov method.\
-Input parameters include:\n\
-  -random_exact_sol : use a random exact solution vector\n\
-  -view_exact_sol   : write exact solution vector to stdout\n\
-  -m <mesh_x>       : number of mesh points in x-direction\n\
-  -n <mesh_n>       : number of mesh points in y-direction\n\n";
-
-extern PetscErrorCode ShellApplyML(PC,Vec,Vec);
-
-#undef __FUNCT__
-#define __FUNCT__ "main"
-int main(int argc,char **args)
-{
-  Vec            x,b,u;  /* approx solution, RHS, exact solution */
-  Mat            A;        /* linear system matrix */
-  KSP            ksp;     /* linear solver context */
+  Vec            x,b;            /* approx solution, RHS  */
+  Mat            A;              /* linear system matrix */
+  KSP            ksp;            /* linear solver context */
   KSP            kspSmoother=0;  /* solver context for PETSc fine grid smoother */
   PC pc;
-  PetscRandom    rctx;     /* random number generator context */
-  PetscReal      norm;     /* norm of solution error */
+  PetscRandom    rctx;           /* random number generator context */
+  PetscReal      norm;           /* norm of solution error */
   PetscInt       i,j,Ii,J,Istart,Iend,its;
-  PetscInt       m = 50,n = 50; /* #mesh points in x & y directions, resp. */
+  PetscInt       m = 50,n = 50;  /* #mesh points in x & y directions, resp. */
   PetscErrorCode ierr;
   PetscBool     flg;
   PetscScalar    v,one = 1.0,neg_one = -1.0;
   PetscInt rank=0;
   MPI_Comm comm;
 
+  //
+  // Initialize PETSc and get command line arguments
+  //
   PetscInitialize(&argc,&args,(char *)0,help);
-  ierr = PetscOptionsGetInt(PETSC_NULL,"-m",&m,PETSC_NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsGetInt(PETSC_NULL,"-n",&n,PETSC_NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsGetInt(PETSC_NULL,"-mx",&m,PETSC_NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsGetInt(PETSC_NULL,"-my",&n,PETSC_NULL);CHKERRQ(ierr);
 
+  //
+  // Create the PETSc matrix
+  //
   ierr = MatCreate(PETSC_COMM_WORLD,&A);CHKERRQ(ierr);
   ierr = MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE,m*n,m*n);CHKERRQ(ierr);
   ierr = MatSetType(A, MATAIJ);CHKERRQ(ierr);
-  ierr = MatSetFromOptions(A);CHKERRQ(ierr);
   ierr = MatMPIAIJSetPreallocation(A,5,PETSC_NULL,5,PETSC_NULL);CHKERRQ(ierr);
   ierr = MatSetUp(A);CHKERRQ(ierr);
-  PetscObjectGetComm( (PetscObject)A, &comm);
-  ierr = MPI_Comm_rank(comm,&rank);CHKERRQ(ierr);
-  if (!rank) printf("Matrix has %d (%dx%d) rows\n",m*n,m,n);
+  ierr = PetscObjectGetComm( (PetscObject)A, &comm);CHKERRQ(ierr);
 
   ierr = MatGetOwnershipRange(A,&Istart,&Iend);CHKERRQ(ierr);
 
@@ -123,33 +91,21 @@ int main(int argc,char **args)
   ierr = MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
   ierr = MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
 
-  /* Wrap the PETSc matrix as a Tpetra_PETScAIJMatrix. This is lightweight,
-     i.e., no deep data copies. */
-//  RCP<PETScAIJMatrix> epA = rcp(new PETScAIJMatrix(A));
+  //
+  // Create the solution vector and RHS
+  //
+  ierr = VecCreate(PETSC_COMM_WORLD,&x);CHKERRQ(ierr);
+  ierr = VecSetSizes(x,PETSC_DECIDE,m*n);CHKERRQ(ierr);
+  ierr = VecDuplicate(x,&b);CHKERRQ(ierr);
+  ierr = PetscRandomCreate(PETSC_COMM_WORLD,&rctx);CHKERRQ(ierr);
+  ierr = PetscRandomSetFromOptions(rctx);CHKERRQ(ierr);
+  ierr = VecSetRandom(b,rctx);CHKERRQ(ierr);
+  ierr = PetscRandomDestroy(&rctx);CHKERRQ(ierr);
+
+  //
+  // Copy the PETSc matrix to a Tpetra CrsMatrix
+  //
   RCP<CrsMatrix> epA = xSDKTrilinos::deepCopyPETScAIJMatrixToTpetraCrsMatrix<Scalar,LO,GO,Node>(A);
-
-  std::cout << "isLocallyIndexed: " << epA->isLocallyIndexed() << std::endl;
-  std::cout << "isGloballyIndexed: " << epA->isGloballyIndexed() << std::endl;
-
-  ierr = VecCreate(PETSC_COMM_WORLD,&u);CHKERRQ(ierr);
-  ierr = VecSetSizes(u,PETSC_DECIDE,m*n);CHKERRQ(ierr);
-  ierr = VecSetFromOptions(u);CHKERRQ(ierr);
-  ierr = VecDuplicate(u,&b);CHKERRQ(ierr); 
-
-  ierr = VecDuplicate(b,&x);CHKERRQ(ierr);
-
-  ierr = PetscOptionsHasName(PETSC_NULL,"-random_exact_sol",&flg);CHKERRQ(ierr);
-  if (flg) {
-    ierr = PetscRandomCreate(PETSC_COMM_WORLD,&rctx);CHKERRQ(ierr);
-    ierr = PetscRandomSetFromOptions(rctx);CHKERRQ(ierr);
-    ierr = VecSetRandom(u,rctx);CHKERRQ(ierr);
-    ierr = PetscRandomDestroy(&rctx);CHKERRQ(ierr);
-  } else {
-    ierr = VecSet(u,one);CHKERRQ(ierr);
-  }
-  ierr = MatMult(A,u,b);CHKERRQ(ierr);
-  ierr = VecNorm(b,NORM_2,&norm);CHKERRQ(ierr);
-  if (rank==0) printf("||b|| = %f\n",norm);
 
   /* Copy the PETSc vectors to Tpetra vectors. */
   PetscScalar *vals;

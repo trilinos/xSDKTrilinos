@@ -1,3 +1,17 @@
+/*
+   This example demonstrates how to use a PETSc KSP linear solver with
+   an Ifpack2  to compute the
+   eigenpairs of a PETSc matrix.
+
+   The PETSc matrix is a 2D 5-point Laplace operator stored in AIJ format.
+   This matrix is wrapped as an PETScAIJMatrix.  The associated eigenvalue
+   problem is solved using Anasazi.
+
+   To invoke this example, use something like:
+
+       mpirun -np 5 ./AnasaziTest.exe -mx 150 -my 150
+*/
+
 #include "BelosConfigDefs.hpp"
 #include "BelosLinearProblem.hpp"
 #include "BelosTpetraAdapter.hpp"

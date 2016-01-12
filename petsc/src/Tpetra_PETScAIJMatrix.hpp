@@ -68,8 +68,9 @@
 
 
 namespace xSDKTrilinos {
+
 template<class Scalar, class LO, class GO, class Node>
-Teuchos::RCP<Tpetra::CrsMatrix<Scalar,LO,GO,Node> > deepCopyPETScAIJMatrixToTpetraCrsMatrix(Mat A)
+Teuchos::RCP<Tpetra::CrsMatrix<Scalar,LO,GO,Node> > deepCopyPETScAIJMatrixToTpetraCrsMatrix(const Mat& A)
 {
   using Teuchos::RCP;
   typedef Tpetra::Map<LO,GO,Node>                   Map;
@@ -124,6 +125,48 @@ Teuchos::RCP<Tpetra::CrsMatrix<Scalar,LO,GO,Node> > deepCopyPETScAIJMatrixToTpet
   TrilinosMat->fillComplete();
 
   return TrilinosMat;
+}
+
+template<class Scalar, class LO, class GO, class Node>
+Teuchos::RCP<Tpetra::Vector<Scalar,LO,GO,Node> > deepCopyPETScVecToTpetraVector(const Vec& v)
+{
+  using Teuchos::ArrayView;
+  using Teuchos::RCP;
+  using Teuchos::rcp;
+  typedef Tpetra::Vector<Scalar,LO,GO,Node>         Vector;
+  typedef Tpetra::Map<LO,GO,Node>                   Map;
+
+  PetscErrorCode ierr;
+  PetscScalar *vals, *valscopy;
+  PetscInt length, numLocalRows, numGlobalRows;
+
+  // Get information about the distribution from PETSc
+  // Note that this is only valid for a block row distribution
+  ierr = VecGetLocalSize(v,&numLocalRows); CHKERRCONTINUE(ierr);
+  ierr = VecGetSize(v,&numGlobalRows); CHKERRCONTINUE(ierr);
+
+  // Get the communicator
+  RCP< Teuchos::Comm<int> > TrilinosComm;
+#ifdef HAVE_MPI
+  MPI_Comm PETScComm;
+  PetscObjectGetComm( (PetscObject)v, &PETScComm);
+  TrilinosComm = rcp(new Teuchos::MpiComm<int>(PETScComm));
+#else
+  TrilinosComm = rcp(new Teuchos::SerialComm<int>());
+#endif
+
+  // Create a Tpetra map reflecting this distribution
+  RCP<Map> map = rcp(new Map(numGlobalRows,numLocalRows,0,TrilinosComm));
+
+  ierr = VecGetArray(v,&vals); CHKERRCONTINUE(ierr);
+  ierr = VecGetLocalSize(v,&length); CHKERRCONTINUE(ierr);
+  valscopy = (PetscScalar*) malloc(length*sizeof(PetscScalar));
+  memcpy(valscopy,vals,length*sizeof(PetscScalar));
+  ierr = VecRestoreArray(v,&vals); CHKERRCONTINUE(ierr);
+  ArrayView<PetscScalar> epuView(valscopy,length);
+  RCP<Vector> tpvec = rcp(new Vector(map,epuView));
+
+  return tpvec;
 }
 
 }

@@ -327,12 +327,14 @@ private:
     static const int verbosity_default_;
     static const std::string label_default_;
     static const Teuchos::RCP<std::ostream> outputStream_default_;
+    static const KSPType solver_default_;
 
     // Current solver values.
     MagnitudeType convtol_,achievedTol_;
     int maxIters_, numIters_;
     int verbosity_;
     bool assertPositiveDefiniteness_;
+    std::string solver_;
 
     // Timers.
     std::string label_;
@@ -367,6 +369,8 @@ const std::string PETScSolMgr<ScalarType,MV,OP>::label_default_ = "Belos";
 template<class ScalarType, class MV, class OP>
 const Teuchos::RCP<std::ostream> PETScSolMgr<ScalarType,MV,OP>::outputStream_default_ = Teuchos::rcp(&std::cout,false);
 
+template<class ScalarType, class MV, class OP>
+const KSPType PETScSolMgr<ScalarType,MV,OP>::solver_default_ = KSPGMRES;
 
 //=============================================================================
 // Empty constructor
@@ -446,6 +450,14 @@ void PETScSolMgr<ScalarType,MV,OP>::setParameters( const Teuchos::RCP<Teuchos::P
 
     // Update parameter in our list.
     params_->set("Assert Positive Definiteness", assertPositiveDefiniteness_);
+  }
+
+  // Check if the user has defined a particular Krylov solver to be used
+  if (params->isParameter("Solver")) {
+    solver_ = params->get("Solver", solver_default_);
+
+    // Update parameter in our list
+    params_->set("Solver", solver_);
   }
 
   // Check to see if the timer label changed.
@@ -542,6 +554,8 @@ PETScSolMgr<ScalarType,MV,OP>::getValidParameters() const
       "solver output is sent.");
     pl->set("Timer Label", label_default_,
       "The string to use as a prefix for the timer labels.");
+    pl->set("Solver", solver_default_,
+      "The string to use as the KSP solver name.");
     //  defaultParams_->set("Restart Timers", restartTimers_);
     validParams_ = pl;
   }
@@ -598,6 +612,9 @@ ReturnType PETScSolMgr<ScalarType,MV,OP>::solve()
 
   // Set the KSP options
   ierr = KSPSetFromOptions(solver); CHKERRCONTINUE(ierr);
+
+  // Select which solver we use
+  ierr = KSPSetType(solver, solver_.c_str()); CHKERRCONTINUE(ierr);
 
   // Tell the solver not to zero out the initial vector
   ierr = KSPSetInitialGuessNonzero(solver, PETSC_TRUE); CHKERRCONTINUE(ierr);

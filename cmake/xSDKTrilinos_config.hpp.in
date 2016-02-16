@@ -7,6 +7,9 @@
 /* Define if want to build with Epetra enabled */
 #cmakedefine HAVE_XSDKTRILINOS_EPETRA
 
+/* Define if want to build with EpetraExt enabled */
+#cmakedefine HAVE_XSDKTRILINOS_EPETRAEXT
+
 /* Define if want to build with MueLu enabled */
 #cmakedefine HAVE_XSDKTRILINOS_MUELU
 

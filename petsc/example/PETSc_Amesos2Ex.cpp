@@ -51,13 +51,14 @@ int main(int argc,char **args)
   PetscScalar    v;
   PetscInt rank=0;
   MPI_Comm comm;
+  PetscBool set;
 
   //
   // Start PETSc and get the problem dimensions via command line argument
   //
   PetscInitialize(&argc,&args,NULL,NULL);
-  ierr = PetscOptionsGetInt(PETSC_NULL,"-mx",&m,PETSC_NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsGetInt(PETSC_NULL,"-my",&n,PETSC_NULL);CHKERRQ(ierr);
+//  ierr = PetscOptionsGetInt(PETSC_NULL,"-mx",&m,&set);
+//  ierr = PetscOptionsGetInt(PETSC_NULL,"-my",&n,&set);
 
   //
   // Create the matrix

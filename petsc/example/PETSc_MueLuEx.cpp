@@ -24,8 +24,6 @@
 #include "BelosPseudoBlockCGSolMgr.hpp"
 #include "BelosTpetraAdapter.hpp"
 
-int main(int argc,char **args)
-{
   using Teuchos::RCP;
   using Teuchos::rcp;
   using Teuchos::ArrayView;
@@ -45,6 +43,10 @@ int main(int argc,char **args)
   typedef Belos::LinearProblem<Scalar,MV,OP>                               LP;
   typedef Belos::PseudoBlockCGSolMgr<Scalar,MV,OP>                         SolMgr;
 
+PetscErrorCode ShellApplyML(PC pc,Vec x,Vec y);
+
+int main(int argc,char **args)
+{
   Vec            x,b;            /* approx solution, RHS  */
   Mat            A;              /* linear system matrix */
   KSP            ksp;            /* linear solver context */
@@ -55,17 +57,15 @@ int main(int argc,char **args)
   PetscInt       i,j,Ii,J,Istart,Iend,its;
   PetscInt       m = 50,n = 50;  /* #mesh points in x & y directions, resp. */
   PetscErrorCode ierr;
-  PetscBool     flg;
-  PetscScalar    v,one = 1.0,neg_one = -1.0;
-  PetscInt rank=0;
+  PetscScalar    v,neg_one = -1.0;
   MPI_Comm comm;
 
   //
   // Initialize PETSc and get command line arguments
   //
-  PetscInitialize(&argc,&args,(char *)0,help);
-  ierr = PetscOptionsGetInt(PETSC_NULL,"-mx",&m,PETSC_NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsGetInt(PETSC_NULL,"-my",&n,PETSC_NULL);CHKERRQ(ierr);
+  PetscInitialize(&argc,&args,PETSC_NULL,PETSC_NULL);
+//  ierr = PetscOptionsGetInt(PETSC_NULL,"-mx",&m,PETSC_NULL);CHKERRQ(ierr);
+//  ierr = PetscOptionsGetInt(PETSC_NULL,"-my",&n,PETSC_NULL);CHKERRQ(ierr);
 
   //
   // Create the PETSc matrix
@@ -109,28 +109,18 @@ int main(int argc,char **args)
 
   /* Copy the PETSc vectors to Tpetra vectors. */
   PetscScalar *vals;
-  ierr = VecGetArray(u,&vals);CHKERRQ(ierr);
+  ierr = VecGetArray(x,&vals);CHKERRQ(ierr);
   PetscInt length;
-  ierr = VecGetLocalSize(u,&length);CHKERRQ(ierr);
+  ierr = VecGetLocalSize(x,&length);CHKERRQ(ierr);
   PetscScalar* valscopy = (PetscScalar*) malloc(length*sizeof(PetscScalar));
   memcpy(valscopy,vals,length*sizeof(PetscScalar));
-  ierr = VecRestoreArray(u,&vals);CHKERRQ(ierr);
-  ArrayView<PetscScalar> epuView(valscopy,length);
-  RCP<Vector> epu = rcp(new Vector(epA->getRowMap(),epuView));
+  ierr = VecRestoreArray(x,&vals);CHKERRQ(ierr);
+  ArrayView<PetscScalar> epxView(valscopy,length);
+  RCP<Vector> epx = rcp(new Vector(epA->getRowMap(),epxView));
   RCP<Vector> epb = rcp(new Vector(epA->getRowMap()));
-  epA->apply(*epu, *epb);
+  epA->apply(*epx, *epb);
 
-  /* Check norms of the Tpetra and PETSc vectors. */
-  norm = epu->norm2();
-  if (rank == 0) printf("||tpetra u||_2 = %f\n",norm);
-  ierr = VecNorm(u,NORM_2,&norm);CHKERRQ(ierr);
-  if (rank == 0) printf("||petsc u||_2  = %f\n",norm);
-  norm = epb->norm2();
-  if (rank == 0) printf("||tpetra b||_2 = %f\n",norm);
-  ierr = VecNorm(b,NORM_2,&norm);CHKERRQ(ierr);
-  if (rank == 0) printf("||petsc b||_2  = %f\n",norm);
-
-  /* Create the ML AMG preconditioner. */
+  /* Create the MueLu AMG preconditioner. */
 
   /* Parameter list that holds options for AMG preconditioner. */
   Teuchos::ParameterList mlList;
@@ -140,37 +130,7 @@ int main(int argc,char **args)
   /* Specify how much information ML prints to screen.
      0 is the minimum (no output), 10 is the maximum. */
   mlList.set("ML output",10);
-  /* Set the fine grid smoother.  PETSc will be much faster for any
-     smoother requiring row access, e.g., SOR.  For any smoother whose
-     kernel is a matvec, Trilinos/PETSc performance should be comparable,
-     as Trilinos simply calls the PETSc matvec.
-
-     To use a PETSc smoother, create a KSP object, set the KSP type to
-     KSPRICHARDSON, and set the desired smoother as the KSP preconditioner.
-     It is important that you call KSPSetInitialGuessNonzero.  Otherwise, the
-     post-smoother phase will incorrectly ignore the current approximate
-     solution.  The KSP pointer must be cast to void* and passed to ML via
-     the parameter list.
-
-     You are responsible for freeing the KSP object.
-  */
-  ierr = PetscOptionsHasName(PETSC_NULL,"-petsc_smoother",&flg);CHKERRQ(ierr);
-  if (flg) {
-    ierr = KSPCreate(comm,&kspSmoother);CHKERRQ(ierr);
-    ierr = KSPSetOperators(kspSmoother,A,A);CHKERRQ(ierr);
-    ierr = KSPSetType(kspSmoother,KSPRICHARDSON);CHKERRQ(ierr);
-    ierr = KSPSetTolerances(kspSmoother, 1e-12, 1e-50, 1e7,1);
-    ierr = KSPSetInitialGuessNonzero(kspSmoother,PETSC_TRUE);CHKERRQ(ierr);
-    ierr = KSPGetPC(kspSmoother,&pc);CHKERRQ(ierr);
-    ierr = PCSetType(pc, PCSOR);CHKERRQ(ierr);
-    ierr = PCSORSetSymmetric(pc,SOR_LOCAL_SYMMETRIC_SWEEP);CHKERRQ(ierr);
-    ierr = PCSetFromOptions(pc);CHKERRQ(ierr);
-    ierr = KSPSetUp(kspSmoother);CHKERRQ(ierr);
-    mlList.set("smoother: type (level 0)","petsc");
-    mlList.set("smoother: petsc ksp (level 0)",(void*)kspSmoother);
-  } else {
-    mlList.set("smoother: type (level 0)","symmetric Gauss-Seidel");
-  }
+  mlList.set("smoother: type (level 0)","symmetric Gauss-Seidel");
 
   /* how many fine grid pre- or post-smoothing sweeps to do */
   mlList.set("smoother: sweeps (level 0)",2);
@@ -180,8 +140,8 @@ int main(int argc,char **args)
   RCP<MueLuOp> Prec = MueLu::CreateTpetraPreconditioner(Teuchos::rcp_dynamic_cast<OP>(epA), mlList);
 
   /* Trilinos CG */
-  epu->putScalar(0.0);
-  RCP<LP> Problem = rcp(new LP(epA, epu, epb));
+  epx->putScalar(0.0);
+  RCP<LP> Problem = rcp(new LP(epA, epx, epb));
   Problem->setLeftPrec(Prec);
   Problem->setProblem();
   RCP<Teuchos::ParameterList> cgPL = rcp(new Teuchos::ParameterList());
@@ -211,7 +171,7 @@ int main(int argc,char **args)
 
   ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
 
-  ierr = VecAXPY(x,neg_one,u);CHKERRQ(ierr);
+  ierr = VecAXPY(x,neg_one,x);CHKERRQ(ierr);
   ierr = VecNorm(x,NORM_2,&norm);CHKERRQ(ierr);
   ierr = KSPGetIterationNumber(ksp,&its);CHKERRQ(ierr);
 
@@ -219,7 +179,7 @@ int main(int argc,char **args)
                      norm,its);CHKERRQ(ierr);
 
   ierr = KSPDestroy(&ksp);CHKERRQ(ierr);
-  ierr = VecDestroy(&u);CHKERRQ(ierr);  ierr = VecDestroy(&x);CHKERRQ(ierr);
+  ierr = VecDestroy(&x);CHKERRQ(ierr);
   ierr = VecDestroy(&b);CHKERRQ(ierr);  ierr = MatDestroy(&A);CHKERRQ(ierr);
 
   if (kspSmoother) {ierr = KSPDestroy(&kspSmoother);CHKERRQ(ierr);}

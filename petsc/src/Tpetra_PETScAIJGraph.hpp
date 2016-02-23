@@ -58,10 +58,7 @@
 #include "Teuchos_DefaultSerialComm.hpp"
 #endif
 //Petsc headers.
-//Note: Petsc internally hard-codes paths to headers, relative to the PETSC home
-//      directory.  This means that --with-incdirs must contain the full path(s)
-//      to the header below plus the PETSc home directory.
-#include "src/mat/impls/aij/mpi/mpiaij.h"
+#include "petscmat.h"
 #include <type_traits>
 
 
@@ -224,6 +221,7 @@ PETScAIJGraph<LO,GO,Node>::PETScAIJGraph(Mat PETScMat)
   MatType type;
   MatInfo info;
   PetscInt PETScCols, PETScLocalCols, rowStart;
+  Mat OffDiagonal;
 
   // Wrap the communicator in a Teuchos Comm
 #ifdef HAVE_MPI
@@ -263,18 +261,18 @@ PETScAIJGraph<LO,GO,Node>::PETScAIJGraph(Mat PETScMat)
   nnzGlobal_ = info.nz_used;
 
   // Get the GIDs of the non-local columns
-  // TODO: I would really like to avoid digging around in the PETSc Mat, but I have no choice at the moment.
-  numLocalCols_ = PETScLocalCols;
-  Mat_MPIAIJ* aij = 0;
-  if(strcmp(type,MATMPIAIJ)==0)
-  {
-    aij = (Mat_MPIAIJ*)PETScMat->data;
-    numLocalCols_ += aij->B->cmap->n;
-  }
+  const PetscInt * garray;
+  ierr = MatMPIAIJGetSeqAIJ(PETScMat,NULL,&OffDiagonal,&garray); CHKERRV(ierr);
+  ierr = MatGetSize(OffDiagonal,NULL,&PETScCols); CHKERRV(ierr);
+  numLocalCols_ = PETScLocalCols+PETScCols;
+
+//  for(size_t i=0; i<10; i++) std::cerr << "garray[" << i << "] = " << garray[i] << std::endl;
 
   Array<int> ColGIDs(numLocalCols_);
   for (PetscInt i=0; i<PETScLocalCols; i++) ColGIDs[i] = rowStart + i;
-  for (size_t i=PETScLocalCols; i<numLocalCols_; i++) ColGIDs[i] = aij->garray[i-PETScLocalCols];
+  for (size_t i=PETScLocalCols; i<numLocalCols_; i++) ColGIDs[i] = garray[i-PETScLocalCols];
+
+//  for(size_t i=0; i<numLocalCols_; i++) std::cerr << "ColGIDs[" << i << "] = " <<  ColGIDs[i] << std::endl;
 
   // Create the column map
   // TODO: Will the index base always be 0?

@@ -60,10 +60,7 @@
 #include "Teuchos_DefaultSerialComm.hpp"
 #endif
 //Petsc headers.
-//Note: Petsc internally hard-codes paths to headers, relative to the PETSC home
-//      directory.  This means that --with-incdirs must contain the full path(s)
-//      to the header below plus the PETSc home directory.
-#include "src/mat/impls/aij/mpi/mpiaij.h"
+#include <petscmat.h>
 #include <type_traits>
 
 

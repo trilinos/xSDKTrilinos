@@ -73,7 +73,7 @@
 //Note: Petsc internally hard-codes paths to headers, relative to the PETSC home
 //      directory.  This means that --with-incdirs must contain the full path(s)
 //      to the header below plus the PETSc home directory.
-#include "include/petscksp.h"
+#include "petscksp.h"
 #include <type_traits>
 
 // TODO: Because PETSc is using its own vector class, Kokkos is not being used for vector operations.

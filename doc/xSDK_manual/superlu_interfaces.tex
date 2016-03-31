@@ -1,0 +1,52 @@
+\section{Trilinos-SuperLU}
+
+Trilinos has a Tpetra-based interface to SuperLU-Dist in the sparse
+factorization package Amesos2.  All Amesos2 solvers can be used the
+following way:
+
+\begin{enumerate}
+  \item Create the solver using the Amesos2 solver factory, which takes as input
+  a string denoting which solver is to be used (KLU2, MUMPS, PARDISO, etc) and
+  the matrix to be factored.
+  \item Set the parameters for that solver (optional)\footnote{Parameters are
+  documented at
+  \url{https://trilinos.org/docs/dev/packages/amesos2/doc/html/group__amesos2__solver__parameters.html}}
+  \item Perform a symbolic factorization based on the sparsity pattern of the
+  matrix
+  \item Perform a numeric factorization based on the entries of the matrix.  If
+  the matrix's values changed, this factorization must be performed again.
+  \item Set the initial guess and right-hand side vectors.
+  \item Solve the linear system.  Note that multiple solves can be done without
+  needing to refactor the matrix.
+\end{enumerate}
+
+There are numerous examples on the Amesos2 Doxygen page
+(\url{https://trilinos.org/docs/dev/packages/amesos2/doc/html/examples.html})
+We now present one such example demonstrating how to use this interface to solve
+a sparse linear system.
+
+\begin{lstinputlisting}[caption=SuperLU\_Amesos2Ex.cpp,label=SuperLU_Amesos2Ex.cpp]{src/SuperLU_Amesos2Ex.cpp}
+\end{lstinputlisting}
+
+\paragraph{Lines 1--31}
+Include statements and typedefs
+
+\paragraph{Lines 33--35}
+Initialize MPI
+
+\paragraph{Lines 41--66}
+Create a map describing the parallel distribution of the matrix rows.  Then,
+create the matrix, specifying that each row will have at most three entries.  We
+then set the entries of the matrix by calling insertGlobalValues.
+
+\paragraph{Lines 68--90}
+Create the initial guess and right-hand side vector.  The initial guess $X$ will
+be overwritten by the solution computed by SuperLU\_Dist.
+
+\paragraph{Lines 92--116}
+Ask Amesos2 whether SuperLU\_Dist has been enabled.  If so, create a
+SuperLU\_Dist solver using the Amesos2 solver factory.  Note that the interface
+is the same regardless of the solver; if you wished to use Amesos2's native KLU2
+solver, you would simply replace ``SuperLU\_DIST'' in lines 93 and 96 with
+``KLU2''.  Perform a symbolic factorization, numeric factorization, then a
+linear solve.  

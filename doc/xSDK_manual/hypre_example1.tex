@@ -1,0 +1,47 @@
+In our first example (Program \ref{Hypre_SolveEx.cpp}), we will examine how
+to use hypre solvers and preconditioners with Tpetra objects.
+
+\begin{lstinputlisting}[caption=Hypre\_SolveEx.cpp,label=Hypre_SolveEx.cpp]{src/Hypre_SolveEx.cpp}
+\end{lstinputlisting}
+
+\paragraph{Lines 1--5}
+Include statements
+
+\paragraph{Lines 8--24}
+Typedefs and using statements to make the code more readable
+
+\paragraph{Lines 26--30}
+Set up MPI
+
+\paragraph{Lines 32--40}
+Parse command line arguments.  This program allows the user to specify how large
+the problem should be and how accurately the linear system should be solved.
+
+\paragraph{Lines 42--76}
+Set up the 2D Laplace operator.
+
+\paragraph{Lines 78--81}
+Create a random right-hand-side and initialize the solution vector to 0.
+
+\paragraph{Lines 83--94}
+Set hypre options (documented in the hypre user and reference manuals found at
+\url{http://computation.llnl.gov/project/linear_solvers/software.php}). In this
+example, we have elected to use the conjugate gradient method with an algebraic
+multigrid preconditioner.  We have specified a particular coarsening and
+relaxation type.  The most important thing to note about BoomerAMG is that if
+you would like to use it as a preconditioner, you must set its maximum number of
+iterations to 1; otherwise, hypre will assume you meant to use it as a linear
+solver.  We then set the tolerance and maximum number of iterations for hypre's
+conjugate gradient solver.
+
+\paragraph{Lines 96--106}
+Create the hypre solver.  Line 99 specifies that we will be using a hypre linear
+solver, and line 100 says it will be the conjugate gradient method.  Line 101
+says we would also like to use BoomerAMG.  Remember that you must also set
+``SetPreconditioner'' to true, or the preconditioner will not be used.  Lines
+103 and 104 specify the hypre parameters such as print level, tolerance, and
+maximum number of iterations.
+
+\paragraph{Lines 108--109}
+Solve the linear system.  The function ``apply'' actually calls the hypre linear
+solve routine PCG with a BoomerAMG preconditioner, as we specified above.

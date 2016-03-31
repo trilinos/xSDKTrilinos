@@ -1,0 +1,12 @@
+\begin{abstract}
+Some application developers need to be able to use Trilinos together with other
+libraries, such as PETSc.  This is nontrivial because these libraries all expect
+the data to be stored in different ways, and the way that you call a PETSc KSP
+linear solver, for instance, looks fundamentally different from the way you
+would call a Belos linear solver.  The IDEAS software productivity project plans
+to address this problem with the Extreme-scale Scientific Software Development
+Kit (xSDK).  The xSDK will provide an interoperability layer that enables easy
+installation and combined usage of the IDEAS libraries, including PETSc, Hypre,
+and SuperLU.  This document describes the various interoperability layers and
+how to install and use the xSDK.
+\end{abstract}

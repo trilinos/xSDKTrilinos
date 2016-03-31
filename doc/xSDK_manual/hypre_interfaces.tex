@@ -1,0 +1,12 @@
+\section{Trilinos-hypre}
+Trilinos also has a new Tpetra-based interface to hypre.  This interface lives
+in the Ifpack2 library with the native Trilinos preconditioners.  The following
+examples will demonstrate how to take advantage of this exciting new
+functionality.
+
+\input{hypre_example1}
+
+\input{hypre_example2}
+
+\subsection{Is the data wrapped or copied?}
+The Tpetra matrix data is deep-copied to a hypre matrix.

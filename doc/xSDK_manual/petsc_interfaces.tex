@@ -1,0 +1,84 @@
+\section{Trilinos-PETSc}
+There is a two-way interface between PETSc and Trilinos which allows users to
+use PETSc datatypes with Trilinos and vice-versa.
+
+\subsection{Using PETSc Mat and Vec with Trilinos solvers}
+Trilinos has two new interfaces to support using PETSc Mat anywhere
+a Tpetra::RowMatrix or Tpetra::CrsMatrix can be used.  For packages requiring a
+Tpetra::RowMatrix or Tpetra::Operator, such as Anasazi and Belos, you may wrap a
+PETSc Mat in a Tpetra::PETScAIJMatrix; otherwise, you can copy it to a
+Tpetra::CrsMatrix.  We will demonstrate each of those functions in the examples
+below.
+
+\input{petsc_example1}
+
+\input{petsc_example2}
+
+\subsubsection{Is the data copied or wrapped?}
+If you are using a part of Trilinos that requires Operator or RowMatrix, the
+data is wrapped.  If you need a CrsMatrix specifically, the data is deep-copied.
+
+\subsection{Using Trilinos datatypes with PETSc KSP solvers}
+If you would like to use Trilinos datatypes, such as Tpetra::Operator and
+Tpetra::MultiVector, with a PETSc KSP linear solver, you may use the new
+Belos\footnote{Belos is the iterative solver package of Trilinos.} interface:
+PETScSolMgr.  This interface is very similar to that of the other native Belos
+linear solvers, which makes solving linear systems such as $AX=B$ a simple
+process.
+
+\begin{enumerate}
+  \item (Optional) Create a Tpetra::Operator for the preconditioner $M \approx
+  A$.  You may use the preexisting preconditioners of Ifpack2 and MueLu, or you
+  may create your own custom preconditioner.  Alternatively, you may choose not
+  to use a preconditioner at all.
+  \item Create a Belos::LinearProblem containing the operator $A$, the initial
+  guess $X$, the right-hand side $B$, and the preconditioner $M$ (if you have
+  one).
+  \item Create a Teuchos::ParameterList containing the parameters you wish to
+  set.  These parameters are summarized in Table \ref{table:ksp_parameters}.
+  \item Create a Belos::PETScSolMgr with the LinearProblem and ParameterList
+  from the previous steps.
+  \item Call solve()
+\end{enumerate}
+
+\begin{table}
+\center
+\begin{tabular}{p{.9in} p{3.5in} c}
+  \hline
+  Parameter & Description & Default Value \\
+  \hline
+  Maximum Iterations & integer defining the maximum number of iterations to be
+  performed. & 1000 \\
+  \hline
+  Solver & string defining the linear solver to be used. A list of all valid
+  linear solver options can be found at
+  \url{http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/KSP/KSPType.html}
+  & KSPGMRES \\
+  \hline
+  Verbosity & Belos::MsgType defining the amount of output the program should
+  produce. Options include Belos::Errors, Belos::Warnings,
+  Belos::IterationDetails, Belos::TimingDetails, and Belos::StatusTestDetails &
+  Belos::Errors
+  \\
+  \hline
+  Convergence Tolerance & double defining the tolerance of the linear solver &
+  $10^{-8}$
+  \\
+  \hline
+\end{tabular}
+\caption{Belos::PETScSolMgr parameters}
+\label{table:ksp_parameters}
+\end{table}
+
+\input{petsc_example3}
+
+\subsubsection{Can I use this to solve linear systems with multiple
+right-hand sides?}
+Yes.  Unfortunately, PETSc has no support for multivectors at
+this time, so each of the right hand sides will be processed independently.
+If you want block or pseudo-block linear solvers, those are available within
+Trilinos.
+
+\subsubsection{Is the data copied or wrapped?}
+The raw Tpetra matrix (or operator) data is wrapped rather than deep copied. 
+The same applies to the preconditioner, if you are using a preconditioner.

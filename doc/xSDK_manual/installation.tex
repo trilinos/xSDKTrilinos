@@ -1,0 +1,25 @@
+\chapter{xSDK Installation}
+The easiest way to install the various xSDK libraries is to use the
+configuration script provided at
+\url{http://xsdk-getting-started-guide.readthedocs.org/}.  
+If you would prefer to manually install Trilinos and enable the PETSc, hypre,
+and SuperLU interfaces, you may specify those options in the Trilinos configuration
+script; an example script is presented as Program \ref{config-script}.
+
+\begin{lstinputlisting}[caption=Sample
+configuration script,label=config-script]{src/do-configure}
+\end{lstinputlisting}
+
+Let's examine this script in more detail.  The first thing we do is define
+where the Trilinos source code is located.  Then, we set the paths to the
+include directory and library directory for each package we wish to enable. 
+Here, we have decided to enable PETSc, hypre, and SuperLU\_Dist.  Since
+SuperLU\_Dist requires METIS and ParMETIS, we must enable them as well.
+The first couple of arguments to CMake are standard Trilinos arguments
+documented in the Trilinos Configure, Build, Test, and Install Reference Guide
+(found at \url{https://trilinos.org/docs/files/TrilinosBuildReference.html}).
+Third Party Libraries are addressed in in section 5.13 of that manual.  For each
+TPL we wish to enable, we add {\tt -D TPL\_ENABLE\_[TPL\_NAME]}, {\tt -D
+[TPL\_NAME]\_LIBRARY\_DIRS}, and {\tt -D [TPL\_NAME]\_INCLUDE\_DIRS}.  We
+explicitly enable the packages Amesos2 and xSDKTrilinos because they contain the
+interfaces to SuperLU\_Dist, hypre, and PETSc.

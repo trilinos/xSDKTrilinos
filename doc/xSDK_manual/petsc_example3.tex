@@ -1,0 +1,39 @@
+The following example (Program \ref{Tpetra_KSPEx.cpp}) illustrates this process
+in greater detail.  Note that this example does not contain a single of PETSc
+code.
+
+\begin{lstinputlisting}[caption=Tpetra\_KSPEx.cpp,label=Tpetra_KSPEx.cpp]{src/Tpetra_KSPEx.cpp}
+\end{lstinputlisting}
+
+\paragraph{Lines 1--9}
+Include statements
+
+\paragraph{Lines 12--24}
+Typedefs and using statements to make the code more readable
+
+\paragraph{Lines 26--29}
+Set up MPI
+
+\paragraph{Lines 31--40} 
+Parse command line arguments.  This program allows the user to specify the
+filename for the matrix, the tolerance for the linear solve, and which linear
+solver is used.  A list of all valid linear solver options can be found at
+\url{http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/KSP/KSPType.html}.
+
+\paragraph{Lines 42--46}
+Set up the linear system by reading the matrix from a file, setting the initial
+guess for the solution as $\vec{0}$ and setting the right hand side as
+$\vec{1}$.
+
+\paragraph{Lines 48--54}
+Set up the Ifpack2 Jacobi preconditioner.
+
+\paragraph{Lines 56--59}
+Set the maximum number of iterations, convergence tolerance, and which PETSc
+KSP solver is being used.
+
+\paragraph{Lines 61--64}
+Set up the linear problem for the Belos solver.
+
+\paragraph{Lines 66-68}
+Solve the linear system.

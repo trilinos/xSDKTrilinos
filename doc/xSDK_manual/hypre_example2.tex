@@ -1,0 +1,33 @@
+In the next example (Program \ref{Hypre_BelosEx.cpp}), we will examine how to
+use hypre preconditioners with Belos solvers.
+
+\begin{lstinputlisting}[caption=Hypre\_BelosEx.cpp,label=Hypre_BelosEx.cpp]{src/Hypre_BelosEx.cpp}
+\end{lstinputlisting}
+
+\paragraph{Lines 1--86}
+These lines are not substantially different from the previous example.  We
+defined convenient typedefs, then set up our operator, solution vector, and
+right hand side.
+
+\paragraph{Lines 88--95}
+This time, we have elected not to use a hypre linear solver, so we only set the
+parameters related to the AMG preconditioner.  Again, it is very important to
+set the maximum number of iterations if you wish to use AMG as a preconditioner.
+
+\paragraph{Lines 97--105}
+Create the hypre preconditioner.  This time, we specify that we would like to
+precondition rather than solve, since we will be using a Belos linear solver.
+
+\paragraph{Lines 107--111}
+Create a Belos::LinearProblem that encapsulates the operator, solution vector,
+right-hand side, and preconditioner.  We also specify that our operator is
+Hermitian so that Belos allows us to use PCG.
+
+\paragraph{Lines 113--120}
+Create a Belos linear solver.  The Belos solvers have many parameters, but we
+only specify the convergence tolerance and verbosity (what information will be
+printed).
+
+\paragraph{Lines 122--123}
+Solve the linear system using a Belos pseudo-block conjugate gradient solver
+with hypre's BoomerAMG preconditioner.

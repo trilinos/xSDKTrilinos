@@ -1,11 +1,11 @@
-/*@HEADER
+// @HEADER
 // ***********************************************************************
 //
-//       Ifpack: Object-Oriented Algebraic Preconditioner Package
-//                 Copyright (2002) Sandia Corporation
+//       xSDKTrilinos: Extreme-scale Software Development Kit Package
+//                 Copyright (2016) Sandia Corporation
 //
-// Under terms of Contract DE-AC04-94AL85000, there is a non-exclusive
-// license for use of this work by or on behalf of the U.S. Government.
+// Under terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -34,10 +34,12 @@
 // NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// Questions? Contact Michael A. Heroux (maherou@sandia.gov)
+// Questions? Contact Alicia Klinvex    (amklinv@sandia.gov)
+//                    James Willenbring (jmwille@sandia.gov)
+//                    Michael Heroux    (maherou@sandia.gov)         
 //
 // ***********************************************************************
-//@HEADER
+// @HEADER
 */
 
 #include "Ifpack2_ETIHelperMacros.h"

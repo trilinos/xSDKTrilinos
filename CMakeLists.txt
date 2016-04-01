@@ -1,6 +1,3 @@
-INCLUDE(TribitsPackageMacros)
-INCLUDE(TribitsAddOptionAndDefine)
-
 #
 # A) Define the package
 #
@@ -11,37 +8,24 @@ TRIBITS_PACKAGE(xSDKTrilinos)
 # B) Set up package-specific options
 #
 
-TRIBITS_ADD_OPTION_AND_DEFINE(${PACKAGE_NAME}_EXPLICIT_TEMPLATE_INSTANTIATION
-  PHX_ETI
-  "Build with explicit template instation enabled."
-  OFF )
-
-TRIBITS_ADD_OPTION_AND_DEFINE(${PACKAGE_NAME}_USING_PETSC
-  HAVE_PETSC
-  "Enable Tpetra/PETSc adapters"
-  OFF )
-
-TRIBITS_ADD_OPTION_AND_DEFINE(${PACKAGE_NAME}_USING_HYPRE
-  HAVE_HYPRE
-  "Enable Tpetra/HYPRE adapters"
-  OFF )
-
-
-TRIBITS_ADD_DEBUG_OPTION()
+# ToDo: Add options when needed
 
 #
 # C) Add the libraries, tests, and examples
 #
 
-IF (HAVE_PETSC)
-ADD_SUBDIRECTORY(petsc)
+ASSERT_DEFINED(${PACKAGE_NAME}_ENABLE_PETSC)
+IF (${PACKAGE_NAME}_ENABLE_PETSC)
+  ADD_SUBDIRECTORY(petsc)
 ENDIF()
 
-IF (HAVE_HYPRE)
-ADD_SUBDIRECTORY(hypre)
+ASSERT_DEFINED(${PACKAGE_NAME}_ENABLE_HYPRE)
+IF (${PACKAGE_NAME}_ENABLE_HYPRE)
+  ADD_SUBDIRECTORY(hypre)
 ENDIF()
 
 TRIBITS_EXCLUDE_AUTOTOOLS_FILES()
+
 #
 # D) Do standard postprocessing
 #

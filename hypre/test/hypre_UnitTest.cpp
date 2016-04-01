@@ -40,7 +40,6 @@
 //
 // ***********************************************************************
 // @HEADER
-*/
 
 #include "Ifpack2_ETIHelperMacros.h"
 #include "Ifpack2_Hypre.hpp"

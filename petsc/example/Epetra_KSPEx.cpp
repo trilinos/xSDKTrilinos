@@ -95,7 +95,7 @@ int main(int argc, char *argv[]) {
   // Process command line arguments
   //
   int numrhs = 1;            // number of right-hand sides to solve for
-  std::string filename("/home/amklinv/matrices/cage4.hb");
+  std::string filename("cage4.hb");
   MT tol = 1.0e-5;           // relative residual tolerance
 
   Teuchos::CommandLineProcessor cmdp(false,false);

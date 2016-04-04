@@ -1,0 +1,96 @@
+#!/bin/bash
+
+#
+# This script is used to configure Trilinos with or without xSDKTrilinos to
+# build, test, and install.
+#
+# This is set up for the ORNL fissile4 machines but is easy to copy and modify
+# this script for other machines.
+#
+# To configure, build and test xSDKTrilinos under Trilinos, first start by
+# cloning the xSDKTrilinos repo under Trilinos/packages/:
+#
+#   $ cd Trilinos/packages/
+#   $ git clone git@github.com:/trilinos/xSDKTrilinos.git
+#
+# Then build and install PETSC (instructions provided elsewhere) and set the
+# env var PETSC_INSTALL_DIR to point to this installation.
+#
+# Then, configure, build, and test Trilinos with:
+#
+#   $ mkdir <some-build-dir>
+#   $ cd <some-build-dir>/
+#   $ ln -s path-to-this-script> do-configure
+#   $ ./do-configure -DTrilinos_ENABLE_xSDKTrilinos
+#   $ make -j12
+#   $ ctest -j12
+#
+# You can also use this script to configure, build, and install the packages
+# that xSDKTrlinos needs and build xSDKTrilinos as a separate project.
+#
+# To configure, build, and install Trilinos for usage by xSDKTrilinos (after
+# installing PETSc and pointing to the PETSC install with PETSC_INSTALL_DIR),
+# do:
+#
+#   $ mkdir <some-build-dir>
+#   $ cd <some-build-dir>/
+#   $ ln -s <path-to-this-script> do-configure
+#   $ ./do-configure -DTrilinos_ENABLE_xSDKTrilinos
+#   $ make -j12
+#   $ ctest -j12
+# 
+
+_ABS_FILE_PATH=`readlink -f $0`
+_SCRIPT_DIR=`dirname $_ABS_FILE_PATH`
+
+if [ "$TRILINOS_DIR" == "" ] ; then
+  TRILINOS_DIR=$_SCRIPT_DIR/../../../..
+fi
+
+TRILINOS_DIR_ABS=$(readlink -f $TRILINOS_DIR)
+echo "TRILINOS_DIR_ABS = $TRILINOS_DIR_ABS"
+
+if [ "$PETSC_INSTALL_DIR" == "" ] ; then
+  PETSC_INSTALL_DIR=/home/8vt/localhome/PROJECTS/PETSc.base/install/mpi-debug
+fi
+
+DRIVERS_BASE_DIR=$TRILINOS_DIR_ABS/cmake/ctest/drivers/fissile4
+
+cmake \
+-D Trilinos_CONFIGURE_OPTIONS_FILE="$DRIVERS_BASE_DIR/gcc-4.8.3-base-options.cmake,$DRIVERS_BASE_DIR/trilinos-tpls-gcc.4.8.3.cmake" \
+-D TPL_ENABLE_MPI=ON \
+-D CMAKE_BUILD_TYPE=DEBUG \
+-D Trilinos_ENABLE_TESTS=ON \
+-D Trilinos_ENABLE_EXPLICIT_INSTANTIATION=ON \
+-D DART_TESTING_TIMEOUT=180.0 \
+-D Amesos_ENABLE_SuperLUDist=OFF \
+-D BUILD_SHARED_LIBS=ON \
+-D TPL_ENABLE_BinUtils=OFF \
+-D TPL_ENABLE_ParMETIS=ON \
+  -D ParMETIS_LIBRARY_DIRS="${PETSC_INSTALL_DIR}/lib" \
+  -D ParMETIS_INCLUDE_DIRS="${PETSC_INSTALL_DIR}/include" \
+-D TPL_ENABLE_SuperLUDist=ON \
+  -D SuperLUDist_LIBRARY_DIRS="${PETSC_INSTALL_DIR}/lib" \
+  -D SuperLUDist_LIBRARY_NAMES="superlu_dist_4.1" \
+  -D SuperLUDist_INCLUDE_DIRS="${PETSC_INSTALL_DIR}/include" \
+-D TPL_ENABLE_HYPRE=ON \
+  -D HYPRE_LIBRARY_DIRS="${PETSC_INSTALL_DIR}/lib" \
+  -D HYPRE_INCLUDE_DIRS="${PETSC_INSTALL_DIR}/include" \
+-D TPL_ENABLE_PETSC=ON \
+  -D PETSC_LIBRARY_DIRS="${PETSC_INSTALL_DIR}/lib" \
+  -D PETSC_INCLUDE_DIRS="${PETSC_INSTALL_DIR}/include" \
+-D Teuchos_ENABLE_COMPLEX:BOOL=OFF \
+-D Teuchos_ENABLE_COMPLEX=OFF \
+-D Tpetra_INST_COMPLEX_DOUBLE=OFF \
+-D Tpetra_INST_COMPLEX_FLOAT=OFF \
+-D Tpetra_INST_FLOAT=OFF \
+-D Teuchos_ENABLE_FLOAT=OFF \
+-D Trilinos_ENABLE_TESTS=ON \
+-D Trilinos_ENABLE_EXPLICIT_INSTANTIATION=ON \
+-D Trilinos_ENABLE_CONFIGURE_TIMING=ON \
+-D Teuchos_ENABLE_DEFAULT_STACKTRACE=ON \
+"$@" \
+${TRILINOS_DIR_ABS}
+
+# NOTE: You have to disable support for SuperLUDist in Amesos because
+# SuperLUDist 4.3 does not work with the version supported by Amesos.

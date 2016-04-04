@@ -1,0 +1,96 @@
+#!/bin/bash
+
+#
+# This script is used to configure, build, and test xSDKTrilinos as its own
+# CMake/TriBITS project pointing to a pre-installed version of Trilinos.  The
+# only issue right now is that in order to avoid duplicating some things in
+# the Trilinos source tree.  Namely, it points to TriBITS in Trilinos and
+# points to a FindTPLHYPRE.cmake.  Needing to point back into the Trilinos
+# soruce tree can be eliminated by snapshotting TriBITS into xSDKTrlinos and
+# coyping the FindTPLHYPRE.cmake file.
+#
+# This is set up for the ORNL fissile4 machines but is easy to copy and modify
+# this script for other machines.
+#
+# In order to configure and build xSDKTrlinos as its own CMake project, do the
+# following:
+#
+# 1) Install PETSc and set PETSC_INSTALL_DIR to the base directory where PETSc
+# inst installed (see other instructions).
+#
+# 2) Configure, build, and install packages that Trilinos needs, for example
+# using:
+#
+#   $ mkdir <some-build-dir>
+#   $ cd <some-build-dir>/
+#   $ ln -s <path-dir>/do-configure-trilinos-fissile4 do-configure
+#   $ export TRILINOS_INSTALL_DIR=<trilinos-install-dir>
+#   $ ./do-configure \
+#      -DTrilinos_ENABLE_Teuchos=ON \
+#      -DTrilinos_ENABLE_Tpetra=ON \
+#      -DTrilinos_ENABLE_Belos=ON \
+#      -DTrilinos_ENABLE_Ifpack2=ON \
+#      -DTrilinos_ENABLE_MueLu=ON \
+#      -DTrilinos_ENABLE_Anasazi=ON \
+#      -DTrilinos_ENABLE_Amesos2=ON \
+#      -DTrilinos_ENABLE_Epetra=ON \
+#      -DTrilinos_ENABLE_EpetraExt=ON \
+#      -DTrilinos_ENABLE_TESTS=OFF \
+#      -DCMAKE_INSTALL_PREFIX=${TRILINOS_INSTALL_DIR} \
+#   $ make -j12 install
+#
+# 3) Configure, build, and test xSDKTrilinos
+#
+#   $ mkdir <some-other-build-dir>
+#   $ cd <some-other-build-dir>/
+#   $ ln -s <this-script> do-configure
+#   $ export TRILINOS_DIR=<trilinos-src-dir>
+#   $ ./do-configure
+#   $ make -j12
+#   $ ctest -j12
+#
+
+_ABS_FILE_PATH=`readlink -f $0`
+_SCRIPT_DIR=`dirname $_ABS_FILE_PATH`
+
+if [ "$XSDKTRILINOS_DIR" == "" ] ; then
+  XSDKTRILINOS_DIR=$_SCRIPT_DIR/..
+fi
+XSDKTRILINOS_DIR_ABS=$(readlink -f $XSDKTRILINOS_DIR)
+echo "XSDKTRILINOS_DIR_ABS = $XSDKTRILINOS_DIR_ABS"
+
+if [ "$TRILINOS_DIR" == "" ] ; then
+  TRILINOS_DIR=$_SCRIPT_DIR/../../..
+fi
+TRILINOS_DIR_ABS=$(readlink -f $TRILINOS_DIR)
+echo "TRILINOS_DIR_ABS = $TRILINOS_DIR_ABS"
+
+if [ "$TRILINOS_INSTALL_DIR" == "" ] ; then
+  TRILINOS_INSTALL_DIR=/home/8vt/localhome/PROJECTS/Trilinos.base/install/mpi_debug_debug
+fi
+TRILINOS_INSTALL_DIR_ABS=$(readlink -f $TRILINOS_INSTALL_DIR)
+echo "TRILINOS_INSTALL_DIR_ABS = $TRILINOS_INSTALL_DIR_ABS"
+
+if [ "$PETSC_INSTALL_DIR" == "" ] ; then
+  PETSC_INSTALL_DIR=/home/8vt/localhome/PROJECTS/PETSc.base/install/mpi-debug
+fi
+echo "PETSC_INSTALL_DIR = $PETSC_INSTALL_DIR"
+
+DRIVERS_BASE_DIR=$TRILINOS_DIR_ABS/cmake/ctest/drivers/fissile4
+
+cmake \
+-D xSDKTrilinos_CONFIGURE_OPTIONS_FILE="$DRIVERS_BASE_DIR/gcc-4.8.3-base-options.cmake,$DRIVERS_BASE_DIR/trilinos-tpls-gcc.4.8.3.cmake" \
+-D TPL_ENABLE_MPI=ON \
+-D CMAKE_BUILD_TYPE=DEBUG \
+-D xSDKTrilinos_ENABLE_TESTS=ON \
+-D DART_TESTING_TIMEOUT=180.0 \
+-D BUILD_SHARED_LIBS=ON \
+-D TPL_ENABLE_HYPRE=ON \
+  -D HYPRE_LIBRARY_DIRS="${PETSC_INSTALL_DIR}/lib" \
+  -D HYPRE_INCLUDE_DIRS="${PETSC_INSTALL_DIR}/include" \
+-D TPL_ENABLE_PETSC=ON \
+  -D PETSC_LIBRARY_DIRS="${PETSC_INSTALL_DIR}/lib" \
+  -D PETSC_INCLUDE_DIRS="${PETSC_INSTALL_DIR}/include" \
+-D Trilinos_INSTALL_DIR="${TRILINOS_INSTALL_DIR}" \
+"$@" \
+${XSDKTRILINOS_DIR_ABS}

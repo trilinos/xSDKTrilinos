@@ -55,10 +55,7 @@
        mpirun -np 5 ./PETSc_MueLu_example.exe -mx 150 -my 150 -petsc_smoother -ksp_monitor_true_residual
 */
 
-// This needs to be here; I can guess why.
 #include "MueLu_CreateTpetraPreconditioner.hpp"
-
-// Put these below all the stuff above, because MueLu is weird.
 #include "petscksp.h"
 #include "Tpetra_ConfigDefs.hpp"
 #include "Tpetra_PETScAIJMatrix.hpp"
@@ -93,22 +90,18 @@ int main(int argc,char **args)
   Vec            x,b;            /* approx solution, RHS  */
   Mat            A;              /* linear system matrix */
   KSP            ksp;            /* linear solver context */
-  KSP            kspSmoother=0;  /* solver context for PETSc fine grid smoother */
   PC pc;
   PetscRandom    rctx;           /* random number generator context */
-  PetscReal      norm;           /* norm of solution error */
-  PetscInt       i,j,Ii,J,Istart,Iend,its;
+  PetscInt       i,j,Ii,J,Istart,Iend;
   PetscInt       m = 50,n = 50;  /* #mesh points in x & y directions, resp. */
   PetscErrorCode ierr;
-  PetscScalar    v,neg_one = -1.0;
+  PetscScalar    v;
   MPI_Comm comm;
 
   //
-  // Initialize PETSc and get command line arguments
+  // Initialize PETSc
   //
   PetscInitialize(&argc,&args,PETSC_NULL,PETSC_NULL);
-//  ierr = PetscOptionsGetInt(PETSC_NULL,"-mx",&m,PETSC_NULL);CHKERRQ(ierr);
-//  ierr = PetscOptionsGetInt(PETSC_NULL,"-my",&n,PETSC_NULL);CHKERRQ(ierr);
 
   //
   // Create the PETSc matrix
@@ -119,7 +112,6 @@ int main(int argc,char **args)
   ierr = MatMPIAIJSetPreallocation(A,5,PETSC_NULL,5,PETSC_NULL);CHKERRQ(ierr);
   ierr = MatSetUp(A);CHKERRQ(ierr);
   ierr = PetscObjectGetComm( (PetscObject)A, &comm);CHKERRQ(ierr);
-
   ierr = MatGetOwnershipRange(A,&Istart,&Iend);CHKERRQ(ierr);
 
   for (Ii=Istart; Ii<Iend; Ii++) { 
@@ -135,69 +127,62 @@ int main(int argc,char **args)
   ierr = MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
 
   //
-  // Create the solution vector and RHS
+  // Create the random solution vector and corresponding RHS
   //
   ierr = VecCreate(PETSC_COMM_WORLD,&x);CHKERRQ(ierr);
   ierr = VecSetSizes(x,PETSC_DECIDE,m*n);CHKERRQ(ierr);
+  ierr = VecSetFromOptions(x);CHKERRQ(ierr);
   ierr = VecDuplicate(x,&b);CHKERRQ(ierr);
   ierr = PetscRandomCreate(PETSC_COMM_WORLD,&rctx);CHKERRQ(ierr);
   ierr = PetscRandomSetFromOptions(rctx);CHKERRQ(ierr);
-  ierr = VecSetRandom(b,rctx);CHKERRQ(ierr);
+  ierr = VecSetRandom(x,rctx);CHKERRQ(ierr);
   ierr = PetscRandomDestroy(&rctx);CHKERRQ(ierr);
+  ierr = MatMult(A,x,b);CHKERRQ(ierr);
+
+  //
+  // Create the initial guess
+  //
+  ierr = VecSet(x,0);CHKERRQ(ierr);
 
   //
   // Copy the PETSc matrix to a Tpetra CrsMatrix
   //
-  RCP<CrsMatrix> epA = xSDKTrilinos::deepCopyPETScAIJMatrixToTpetraCrsMatrix<Scalar,LO,GO,Node>(A);
+  RCP<CrsMatrix> tpetraA = xSDKTrilinos::deepCopyPETScAIJMatrixToTpetraCrsMatrix<Scalar,LO,GO,Node>(A);
 
   /* Copy the PETSc vectors to Tpetra vectors. */
-  PetscScalar *vals;
-  ierr = VecGetArray(x,&vals);CHKERRQ(ierr);
-  PetscInt length;
-  ierr = VecGetLocalSize(x,&length);CHKERRQ(ierr);
-  PetscScalar* valscopy = (PetscScalar*) malloc(length*sizeof(PetscScalar));
-  memcpy(valscopy,vals,length*sizeof(PetscScalar));
-  ierr = VecRestoreArray(x,&vals);CHKERRQ(ierr);
-  ArrayView<PetscScalar> epxView(valscopy,length);
-  RCP<Vector> epx = rcp(new Vector(epA->getRowMap(),epxView));
-  RCP<Vector> epb = rcp(new Vector(epA->getRowMap()));
-  epA->apply(*epx, *epb);
+  RCP<Vector> tpetraX = xSDKTrilinos::deepCopyPETScVecToTpetraVector<Scalar,LO,GO,Node>(x);  
+  RCP<Vector> tpetraB = xSDKTrilinos::deepCopyPETScVecToTpetraVector<Scalar,LO,GO,Node>(b);
 
   /* Create the MueLu AMG preconditioner. */
 
   /* Parameter list that holds options for AMG preconditioner. */
   Teuchos::ParameterList mlList;
   mlList.set("parameterlist: syntax", "ml");
-  /* Set recommended defaults for Poisson-like problems. */
-//  ML_Epetra::SetDefaults("SA",mlList);
   /* Specify how much information ML prints to screen.
      0 is the minimum (no output), 10 is the maximum. */
-  mlList.set("ML output",10);
+  mlList.set("ML output",0);
   mlList.set("smoother: type (level 0)","symmetric Gauss-Seidel");
 
   /* how many fine grid pre- or post-smoothing sweeps to do */
-  mlList.set("smoother: sweeps (level 0)",2);
+  mlList.set("smoother: sweeps (level 0)",1);
 
-  mlList.print();
-
-  RCP<MueLuOp> Prec = MueLu::CreateTpetraPreconditioner(Teuchos::rcp_dynamic_cast<OP>(epA), mlList);
+  RCP<MueLuOp> Prec = MueLu::CreateTpetraPreconditioner(Teuchos::rcp_dynamic_cast<OP>(tpetraA), mlList);
 
   /* Trilinos CG */
-  epx->putScalar(0.0);
-  RCP<LP> Problem = rcp(new LP(epA, epx, epb));
+  RCP<LP> Problem = rcp(new LP(tpetraA, tpetraX, tpetraB));
   Problem->setLeftPrec(Prec);
   Problem->setProblem();
   RCP<Teuchos::ParameterList> cgPL = rcp(new Teuchos::ParameterList());
   cgPL->set("Maximum Iterations", 200);
-  cgPL->set("Verbosity", Belos::IterationDetails + Belos::FinalSummary + Belos::TimingDetails);
-  cgPL->set("Convergence Tolerance", 1e-12);
+  cgPL->set("Verbosity", Belos::StatusTestDetails + Belos::FinalSummary);
+  cgPL->set("Convergence Tolerance", 1e-8);
   SolMgr solver(Problem,cgPL);
   solver.solve();
 
   /* PETSc CG */
   ierr = KSPCreate(PETSC_COMM_WORLD,&ksp);CHKERRQ(ierr);
   ierr = KSPSetOperators(ksp,A,A);CHKERRQ(ierr);
-  ierr = KSPSetTolerances(ksp,1e-12,1.e-50,PETSC_DEFAULT,
+  ierr = KSPSetTolerances(ksp,1e-8,1.e-50,PETSC_DEFAULT,
                           PETSC_DEFAULT);CHKERRQ(ierr);
   ierr = KSPSetType(ksp,KSPCG);CHKERRQ(ierr);
 
@@ -208,24 +193,26 @@ int main(int argc,char **args)
   ierr = PCShellSetContext(pc,(void*)Prec.get());CHKERRQ(ierr);
   ierr = PCShellSetName(pc,"MueLu AMG");CHKERRQ(ierr); 
 
+  /* Solve the linear system using PETSc */
   ierr = KSPSetFromOptions(ksp);CHKERRQ(ierr);
-
   ierr = KSPSolve(ksp,b,x);CHKERRQ(ierr);
 
-  ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
-
-  ierr = VecAXPY(x,neg_one,x);CHKERRQ(ierr);
-  ierr = VecNorm(x,NORM_2,&norm);CHKERRQ(ierr);
+  int its;
+  PetscReal rnorm;
   ierr = KSPGetIterationNumber(ksp,&its);CHKERRQ(ierr);
+  ierr = KSPGetResidualNorm(ksp,&rnorm);CHKERRQ(ierr);
+  std::cout << "Number of KSP iterations: " << its << std::endl;
+  std::cout << "KSP residual norm: " << rnorm << std::endl;
 
-  ierr = PetscPrintf(PETSC_COMM_WORLD,"Norm of error %e iterations %D\n",
-                     norm,its);CHKERRQ(ierr);
+  /* Print the obtained solutions */
+//  ierr = VecView(x,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+//  Teuchos::FancyOStream fancyStream(Teuchos::rcpFromRef(std::cout));
+//  tpetraX->describe(fancyStream,Teuchos::VERB_EXTREME);
 
   ierr = KSPDestroy(&ksp);CHKERRQ(ierr);
   ierr = VecDestroy(&x);CHKERRQ(ierr);
-  ierr = VecDestroy(&b);CHKERRQ(ierr);  ierr = MatDestroy(&A);CHKERRQ(ierr);
-
-  if (kspSmoother) {ierr = KSPDestroy(&kspSmoother);CHKERRQ(ierr);}
+  ierr = VecDestroy(&b);CHKERRQ(ierr);  
+  ierr = MatDestroy(&A);CHKERRQ(ierr);
 
   ierr = PetscFinalize();CHKERRQ(ierr);
   return 0;
@@ -254,19 +241,19 @@ PetscErrorCode ShellApplyML(PC pc,Vec x,Vec y)
   ArrayView<const PetscScalar> xView(xvals,length);
   ArrayView<PetscScalar> yView(yvals,length);
 
-  Vector epx(mlp->getDomainMap(),xView); // TODO: see if there is a way to avoid copying the data
-  Vector epy(mlp->getDomainMap(),yView);
+  Vector tpetraX(mlp->getDomainMap(),xView); // TODO: see if there is a way to avoid copying the data
+  Vector tpetraY(mlp->getDomainMap(),yView);
 
   /* Apply ML. */
-  mlp->apply(epx,epy);
+  mlp->apply(tpetraX,tpetraY);
 
-  /* Rip the data out of epy */
-  Teuchos::ArrayRCP<const Scalar> epxData = epx.getData();
-  Teuchos::ArrayRCP<const Scalar> epyData = epy.getData();
+  /* Rip the data out of tpetra vectors */
+  Teuchos::ArrayRCP<const Scalar> tpetraXData = tpetraX.getData();
+  Teuchos::ArrayRCP<const Scalar> tpetraYData = tpetraY.getData();
 
-  for(int i=0; i< epyData.size(); i++)
+  for(int i=0; i< tpetraYData.size(); i++)
   {
-    yvals[i] = epyData[i];
+    yvals[i] = tpetraYData[i];
   }
   
   /* Clean up and return. */

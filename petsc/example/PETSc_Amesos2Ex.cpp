@@ -89,19 +89,16 @@ int main(int argc,char **args)
   Mat            A;             /* linear system matrix */
   PetscRandom    rctx;          /* random number generator context */
   PetscInt       i,j,Ii,J,Istart,Iend;
-  PetscInt       m = 50,n = 50; /* #mesh points in x & y directions, resp. */
+  PetscInt       m = 4,n = 4; /* #mesh points in x & y directions, resp. */
   PetscErrorCode ierr;
   PetscScalar    v;
   PetscInt rank=0;
   MPI_Comm comm;
-  PetscBool set;
 
   //
-  // Start PETSc and get the problem dimensions via command line argument
+  // Start PETSc 
   //
   PetscInitialize(&argc,&args,NULL,NULL);
-//  ierr = PetscOptionsGetInt(PETSC_NULL,"-mx",&m,&set);
-//  ierr = PetscOptionsGetInt(PETSC_NULL,"-my",&n,&set);
 
   //
   // Create the matrix
@@ -134,21 +131,28 @@ int main(int argc,char **args)
   RCP<CrsMatrix> epA = xSDKTrilinos::deepCopyPETScAIJMatrixToTpetraCrsMatrix<Scalar,LO,GO,Node>(A);
 
   //
-  // Create the solution vector and random right-hand-side
+  // Create a random solution vector and corresponding right-hand-side
   //
   ierr = VecCreate(PETSC_COMM_WORLD,&x);CHKERRQ(ierr);
   ierr = VecSetSizes(x,PETSC_DECIDE,m*n);CHKERRQ(ierr);
-  ierr = VecDuplicate(x,&b);CHKERRQ(ierr);
+  ierr = VecSetFromOptions(x);CHKERRQ(ierr);
   ierr = PetscRandomCreate(PETSC_COMM_WORLD,&rctx);CHKERRQ(ierr);
   ierr = PetscRandomSetFromOptions(rctx);CHKERRQ(ierr);
-  ierr = VecSetRandom(b,rctx);CHKERRQ(ierr);
+  ierr = VecSetRandom(x,rctx);CHKERRQ(ierr);
   ierr = PetscRandomDestroy(&rctx);CHKERRQ(ierr);
+  ierr = VecDuplicate(x,&b);CHKERRQ(ierr);
+  ierr = MatMult(A,x,b);CHKERRQ(ierr);
 
   //
   // Copy the PETSc vectors to Tpetra vectors
   //
   RCP<Vector> tpetraX = xSDKTrilinos::deepCopyPETScVecToTpetraVector<Scalar,LO,GO,Node>(x);
   RCP<Vector> tpetraB = xSDKTrilinos::deepCopyPETScVecToTpetraVector<Scalar,LO,GO,Node>(b);
+
+  //
+  // Initialize the solution to 0
+  //
+  tpetraX->putScalar(0);
 
   //
   // Create an Amesos2 linear solver
@@ -161,6 +165,13 @@ int main(int argc,char **args)
   // Perform a linear solve with Amesos2
   //
   solver->solve();
+
+  //
+  // Print the obtained and true solutions
+  //
+  ierr = VecView(x,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+  Teuchos::FancyOStream fancyStream(Teuchos::rcpFromRef(std::cout));
+  tpetraX->describe(fancyStream,Teuchos::VERB_EXTREME);
 
   //
   // Terminate PETSc

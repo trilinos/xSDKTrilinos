@@ -626,9 +626,9 @@ ReturnType PETScSolMgr<ScalarType,MV,OP>::solve()
   // Tell the solver whether to output convergence information
   if(verbosity_ & IterationDetails || verbosity_ & StatusTestDetails) {
     PetscViewerAndFormat *vf;
-    ierr = PetscViewerAndFormatCreate(PETSC_VIEWER_STDOUT_(PetscObjectComm((PetscObject)solve)),PETSC_VIEWER_DEFAULT);CHKERRQ(ierr);
-    ierr = PetscObjectDereference((PetscObject)vf->viewer);CHKERRQ(ierr);
-    ierr = KSPMonitorSet(solver, (PetscErrorCode (*)(KSP,PetscInt,PetscReal,void*))KSPMonitorDefault, vf, (PetscErrorCode (*)(void**))PetscViewerAndFormatDestroy); CHKERRCONTINUE(ierr);
+    ierr = PetscViewerAndFormatCreate(PETSC_VIEWER_STDOUT_(PetscObjectComm((PetscObject)solve)),PETSC_VIEWER_DEFAULT,&vf);CHKERRQCONTINUE(ierr);
+    ierr = PetscObjectDereference((PetscObject)vf->viewer);CHKERRQCONTINUE((ierr);
+    ierr = KSPMonitorSet(solver, (PetscErrorCode (*)(KSP,PetscInt,PetscReal,void*))KSPMonitorDefault, vf, (PetscErrorCode (*)(void**))PetscViewerAndFormatDestroy);CHKERRCONTINUE(ierr);
   }
 
   // Wrap the Trilinos Operator in a PETSc Mat

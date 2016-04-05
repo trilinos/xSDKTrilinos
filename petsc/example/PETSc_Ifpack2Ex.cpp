@@ -101,7 +101,7 @@ int main(int argc, char *argv[]) {
   int frequency = -1;        // frequency of status test output.
   int numrhs = 1;            // number of right-hand sides to solve for
   int maxiters = -1;         // maximum number of iterations allowed per linear system
-  std::string filename("/home/amklinv/matrices/cage4.mtx");
+  std::string filename("cage4.mtx");
   MT tol = 1.0e-5;           // relative residual tolerance
 
   // ***************** Read the command line arguments *****************

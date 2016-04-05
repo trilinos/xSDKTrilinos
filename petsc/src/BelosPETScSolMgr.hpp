@@ -381,6 +381,7 @@ PETScSolMgr<ScalarType,MV,OP>::PETScSolMgr() :
   verbosity_(verbosity_default_),
   assertPositiveDefiniteness_(assertPositiveDefiniteness_default_),
   label_(label_default_),
+  solver_(solver_default_),
   isSet_(false),
   argc_(0)
 {}
@@ -400,6 +401,7 @@ PETScSolMgr( const Teuchos::RCP<LinearProblem<ScalarType,MV,OP> > &problem,
   verbosity_(verbosity_default_),
   assertPositiveDefiniteness_(assertPositiveDefiniteness_default_),
   label_(label_default_),
+  solver_(solver_default_),
   isSet_(false),
   argc_(0)
 {
@@ -612,6 +614,7 @@ ReturnType PETScSolMgr<ScalarType,MV,OP>::solve()
   ierr = KSPSetFromOptions(solver); CHKERRCONTINUE(ierr);
 
   // Select which solver we use
+  std::cout << "solver: " << solver << std::endl;
   ierr = KSPSetType(solver, solver_.c_str()); CHKERRCONTINUE(ierr);
 
   // Tell the solver not to zero out the initial vector

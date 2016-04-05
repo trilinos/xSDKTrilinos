@@ -4,10 +4,6 @@
 
 MESSAGE("-- Using FIND_PACKAGE(Trilinos ...) ...")
 
-SET(Triinos_INSTALL_DIR ""  CACHE PATH "Path to base Trilinos installation")
-
-SET(CMAKE_PREFIX_PATH ${Trilinos_INSTALL_DIR} ${CMAKE_PREFIX_PATH})
-
 FIND_PACKAGE(Trilinos CONFIG REQUIRED)
 
 SET(TPL_TrilinosTpl_INCLUDE_DIRS "${Trilinos_INCLUDE_DIRS};${Trilinos_TPL_INCLUDE_DIRS}"

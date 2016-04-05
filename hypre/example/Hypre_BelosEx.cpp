@@ -42,7 +42,7 @@
 // @HEADER
 
 //
-// This driver constructs the 2D Laplace operator and a random right hand
+// This driver constructs the 2D Laplace operator and a right hand
 // side, then solves that linear system using Belos' PCG with a hypre
 // preconditioner.
 //
@@ -97,7 +97,6 @@ int main(int argc, char *argv[]) {
   Platform &platform = Tpetra::DefaultPlatform::getDefaultPlatform();
   RCP<const Teuchos::Comm<int> > comm = platform.getComm();
   RCP<Node> node = platform.getNode();
-  int rank = comm->getRank();
 
   //
   // Get parameters from command-line processor
@@ -155,13 +154,14 @@ int main(int argc, char *argv[]) {
   }
   A->fillComplete();
 
-
   //
-  // Create the right hand side
+  // Create the initial guess and right hand side
   //
+  RCP<MV> trueX = rcp(new MV(A->getRowMap(),1,false));
   RCP<MV> X = rcp(new MV(A->getRowMap(),1));
   RCP<MV> B = rcp(new MV(A->getRowMap(),1,false));
-  B->randomize();
+  trueX->randomize();
+  A->apply(*trueX,*B);
 
   //
   // Create the parameters for hypre
@@ -218,12 +218,25 @@ int main(int argc, char *argv[]) {
   //
   // Check the residual
   //
-  RCP<MV> R = rcp(new MV(A->getRowMap(),1));
-  problem->computeCurrResVec(R.get(),X.get(),B.get());
+  MV R(*B,Teuchos::Copy);
+  A->apply(*X,R,Teuchos::NO_TRANS,-1,1);
   std::vector<Scalar> normR(1), normB(1);
-  R->norm2(normR);
+  R.norm2(normR);
   B->norm2(normB);
-  if(rank == 0) std::cout << "Relative residual: " << normR[0] / normB[0] << std::endl;
-  
-  return 0;
+  if(comm->getRank() == 0) std::cout << "Relative residual: " << normR[0] / normB[0] << std::endl;
+  if(normR[0] / normB[0] > tol)
+    return EXIT_FAILURE;
+
+  //
+  // Check the error
+  //
+  MV errorVec(A->getRowMap(),1);
+  errorVec.update(1,*X,-1,*trueX,0);
+  std::vector<Scalar> normErrorVec(1);
+  errorVec.norm2(normErrorVec);
+  if(comm->getRank() == 0) std::cout << "Error: " << normErrorVec[0] << std::endl;
+  if(normErrorVec[0] > 1e-5)
+    return EXIT_FAILURE;
+
+  return EXIT_SUCCESS;
 }

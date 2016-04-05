@@ -42,7 +42,7 @@
 // @HEADER
 
 //
-// This driver constructs the 2D Laplace operator and a random right hand
+// This driver constructs the 2D Laplace operator and a right hand
 // side, then solves that linear system using hypre's PCG with a hypre
 // preconditioner.
 //
@@ -151,26 +151,28 @@ int main(int argc, char *argv[]) {
 
 
   //
-  // Create the right hand side
+  // Create the initial guess and right hand side
   //
+  RCP<MV> trueX = rcp(new MV(A->getRowMap(),1,false));
   RCP<MV> X = rcp(new MV(A->getRowMap(),1));
   RCP<MV> B = rcp(new MV(A->getRowMap(),1,false));
-  B->randomize();
+  trueX->randomize();
+  A->apply(*trueX,*B);
 
   //
   // Create the parameters for hypre
   //
   RCP<FunctionParameter> functs[10];
-  functs[0] = rcp(new FunctionParameter(Prec, &HYPRE_BoomerAMGSetPrintLevel, 1)); // print AMG solution info
+  functs[0] = rcp(new FunctionParameter(Prec, &HYPRE_BoomerAMGSetPrintLevel, 1));  // print AMG solution info
   functs[1] = rcp(new FunctionParameter(Prec, &HYPRE_BoomerAMGSetCoarsenType, 6)); // Falgout coarsening
-  functs[2] = rcp(new FunctionParameter(Prec, &HYPRE_BoomerAMGSetRelaxType, 6)); // Sym GS/Jacobi hybrid
-  functs[3] = rcp(new FunctionParameter(Prec, &HYPRE_BoomerAMGSetNumSweeps, 1)); // Sweeps on each level
-  functs[4] = rcp(new FunctionParameter(Prec, &HYPRE_BoomerAMGSetTol, 0.0)); // Conv tolerance zero
-  functs[5] = rcp(new FunctionParameter(Prec, &HYPRE_BoomerAMGSetMaxIter, 1)); // Do only one iteration!
-  functs[6] = rcp(new FunctionParameter(Solver, &HYPRE_PCGSetMaxIter, 1000)); // Maximum iterations
-  functs[7] = rcp(new FunctionParameter(Solver, &HYPRE_PCGSetTol, tol)); // Convergence tolerance
-  functs[8] = rcp(new FunctionParameter(Solver, &HYPRE_PCGSetTwoNorm, 1)); // Use the two-norm as the stopping criteria
-  functs[9] = rcp(new FunctionParameter(Solver, &HYPRE_PCGSetPrintLevel, 2)); // Print solve info
+  functs[2] = rcp(new FunctionParameter(Prec, &HYPRE_BoomerAMGSetRelaxType, 6));   // Sym GS/Jacobi hybrid
+  functs[3] = rcp(new FunctionParameter(Prec, &HYPRE_BoomerAMGSetNumSweeps, 1));   // Sweeps on each level
+  functs[4] = rcp(new FunctionParameter(Prec, &HYPRE_BoomerAMGSetTol, 0.0));       // Conv tolerance zero
+  functs[5] = rcp(new FunctionParameter(Prec, &HYPRE_BoomerAMGSetMaxIter, 1));     // Do only one iteration!
+  functs[6] = rcp(new FunctionParameter(Solver, &HYPRE_PCGSetMaxIter, 1000));      // Maximum iterations
+  functs[7] = rcp(new FunctionParameter(Solver, &HYPRE_PCGSetTol, tol));           // Convergence tolerance
+  functs[8] = rcp(new FunctionParameter(Solver, &HYPRE_PCGSetTwoNorm, 1));         // Use the two-norm as the stopping criteria
+  functs[9] = rcp(new FunctionParameter(Solver, &HYPRE_PCGSetPrintLevel, 2));      // Print solve info
 
   //
   // Create the preconditioner
@@ -191,5 +193,28 @@ int main(int argc, char *argv[]) {
   //
   prec->apply(*B,*X);
   
-  return 0;
+  //
+  // Check the residual
+  //
+  MV R(*B,Teuchos::Copy);
+  A->apply(*X,R,Teuchos::NO_TRANS,-1,1);
+  std::vector<Scalar> normR(1), normB(1);
+  R.norm2(normR);
+  B->norm2(normB);
+  if(comm->getRank() == 0) std::cout << "Relative residual: " << normR[0] / normB[0] << std::endl;
+  if(normR[0] / normB[0] > tol)
+    return EXIT_FAILURE;
+  
+  //
+  // Check the error
+  //
+  MV errorVec(A->getRowMap(),1);
+  errorVec.update(1,*X,-1,*trueX,0);
+  std::vector<Scalar> normErrorVec(1);
+  errorVec.norm2(normErrorVec);
+  if(comm->getRank() == 0) std::cout << "Error: " << normErrorVec[0] << std::endl;
+  if(normErrorVec[0] > 1e-5)
+    return EXIT_FAILURE;
+
+  return EXIT_SUCCESS;
 }

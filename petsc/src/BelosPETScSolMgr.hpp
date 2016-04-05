@@ -48,6 +48,8 @@
     \brief Pure virtual base class which describes the basic interface for a solver manager.
 */
 
+#include "xSDKTrilinos_config.hpp"
+
 #include "BelosConfigDefs.hpp"
 #include "BelosTypes.hpp"
 

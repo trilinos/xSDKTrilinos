@@ -1,0 +1,3 @@
+/* xSDKTrilinos_config.hpp.in. */
+
+#cmakedefine HAVE_XSDKTRILINOS_EPETRA

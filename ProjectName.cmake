@@ -8,6 +8,7 @@ SET(${PROJECT_NAME}_ENABLE_xSDKTrilinos  ON  CACHE  BOOL
 
 # Set a bunch of vars that are set up automatically by TriBITS
 SET(${PROJECT_NAME}_ENABLE_Epetra ON)
+SET(HAVE_XSDKTRILINOS_EPETRA ON)
 SET(${PROJECT_NAME}_ENABLE_EpetraExt ON)
 SET(${PROJECT_NAME}_ENABLE_Amesos2 ON)
 SET(${PROJECT_NAME}_ENABLE_Anasazi ON)

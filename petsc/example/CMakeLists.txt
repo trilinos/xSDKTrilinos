@@ -8,7 +8,7 @@ SET(example_EpetraKSP_SOURCES Epetra_KSPEx.cpp)
 
 
 TRIBITS_COPY_FILES_TO_BINARY_DIR(CopyxSDKTrilinosPetscExFiles
-  SOURCE_FILES cage4.hb cage4.mtx
+  SOURCE_FILES cage4.mtx
   )
 
 ASSERT_DEFINED(${PACKAGE_NAME}_ENABLE_Amesos2)

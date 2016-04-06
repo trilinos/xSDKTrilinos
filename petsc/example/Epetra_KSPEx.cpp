@@ -42,18 +42,17 @@
 // @HEADER
 
 //
-// This driver reads a problem from a file, which can be in Harwell-Boeing (*.hb),
-// Matrix Market (*.mtx), or triplet format (*.triU, *.triS).  The right-hand side
-// from the problem, if it exists, will be used instead of multiple random
-// right-hand-sides.  The initial guesses are all set to zero.  An ILU preconditioner
-// is constructed using the Ifpack factory and passed to a PETSc linear solver.
+// This driver reads a matrix from a Matrix Market file, and solves a linear
+// system with that matrix as A.  The initial guesses are all set to zero.  
+// An ILU preconditioner is constructed using the Ifpack factory and passed 
+// to a PETSc linear solver.
 //
 #include "BelosConfigDefs.hpp"
 #include "BelosLinearProblem.hpp"
 #include "BelosEpetraAdapter.hpp"
 #include "BelosPETScSolMgr.hpp"
 
-#include "EpetraExt_readEpetraLinearSystem.h"
+#include "EpetraExt_CrsMatrixIn.h"
 #include "Epetra_Map.h"
 #ifdef EPETRA_MPI
   #include "Epetra_MpiComm.h"
@@ -94,9 +93,9 @@ int main(int argc, char *argv[]) {
   //
   // Process command line arguments
   //
-  int numrhs = 1;            // number of right-hand sides to solve for
-  std::string filename("cage4.hb");
-  MT tol = 1.0e-5;           // relative residual tolerance
+  int numrhs = 2;            // number of right-hand sides to solve for
+  std::string filename("cage4.mtx");
+  MT tol = 1.0e-4;           // relative residual tolerance
 
   Teuchos::CommandLineProcessor cmdp(false,false);
   cmdp.setOption("filename",&filename,"Filename for test matrix.  Acceptable file extensions: *.hb,*.mtx,*.triU,*.triS");
@@ -107,29 +106,21 @@ int main(int argc, char *argv[]) {
   }
 
   //
-  // Get the linear problem from a file
+  // Get the matrix from a file
   //
-  RCP<Epetra_Map> Map;
-  RCP<Epetra_CrsMatrix> A;
-  RCP<Epetra_MultiVector> B, X;
-  RCP<Epetra_Vector> vecB, vecX;
-  EpetraExt::readEpetraLinearSystem(filename, Comm, &A, &Map, &vecX, &vecB);
-  A->OptimizeStorage();
+  Epetra_CrsMatrix* A;
+  RCP<Epetra_MultiVector> B, X, trueX;
+  EpetraExt::MatrixMarketFileToCrsMatrix(filename.c_str(), Comm, A, false);
 
   //
-  // Check to see if the number of right-hand sides is the same as requested.
+  // Create a random RHS and set the initial guess to 0
   //
-  if (numrhs>1) {
-    X = rcp( new Epetra_MultiVector( *Map, numrhs ) );
-    B = rcp( new Epetra_MultiVector( *Map, numrhs ) );
-    X->Random();
-    OPT::Apply( *A, *X, *B );
-    X->PutScalar( 0.0 );
-  }
-  else {
-    X = Teuchos::rcp_implicit_cast<Epetra_MultiVector>(vecX);
-    B = Teuchos::rcp_implicit_cast<Epetra_MultiVector>(vecB);
-  }
+  X = rcp( new Epetra_MultiVector( A->RowMap(), numrhs ) );
+  trueX = rcp( new Epetra_MultiVector( A->RowMap(), numrhs ) );
+  B = rcp( new Epetra_MultiVector( A->RowMap(), numrhs ) );
+  trueX->Random();
+  OPT::Apply( *A, *trueX, *B );
+  X->PutScalar( 0.0 );
 
   //
   // Construct preconditioner
@@ -156,12 +147,13 @@ int main(int argc, char *argv[]) {
   int maxiters = 100;
   belosList.set( "Maximum Iterations", maxiters );       // Maximum number of iterations allowed
   belosList.set( "Convergence Tolerance", tol );         // Relative convergence tolerance requested
+  belosList.set( "Verbosity", Belos::IterationDetails ); // Print convergence information
 
   //
   // Construct a preconditioned linear problem
   //
   RCP<Belos::LinearProblem<double,MV,OP> > problem
-  = rcp( new Belos::LinearProblem<double,MV,OP>( A, X, B ) );
+  = rcp( new Belos::LinearProblem<double,MV,OP>( rcp(A,false), X, B ) );
   problem->setLeftPrec( belosPrec );
   problem->setProblem();
 
@@ -175,6 +167,36 @@ int main(int argc, char *argv[]) {
   // Perform solve
   //
   solver->solve();
+  
+  //
+  // Check the residual
+  //
+  MV R( A->RowMap(), numrhs );
+  A->Apply(*X,R);
+  R.Update(1,*B,-1);
+  std::vector<double> normR(numrhs), normB(numrhs);
+  R.Norm2(normR.data());
+  B->Norm2(normB.data());
+  for(int i=0; i<numrhs; i++)
+  {
+    if(Comm.MyPID() == 0) std::cout << "Relative residual: " << normR[i] / normB[i] << std::endl;
+    if(normR[i] / normB[i] > tol)
+      return EXIT_FAILURE;
+  }
+
+  //
+  // Check the error
+  //
+  MV errorVec( A->RowMap(), numrhs );
+  errorVec.Update(1,*X,-1,*trueX,0);
+  std::vector<double> normErrorVec(numrhs);
+  errorVec.Norm2(normErrorVec.data());
+  for(int i=0; i<numrhs; i++)
+  {
+    if(Comm.MyPID() == 0) std::cout << "Error: " << normErrorVec[i] << std::endl;
+    if(normErrorVec[i] > 1e-3)
+      return EXIT_FAILURE;
+  }
 
   //
   // Finalize MPI
@@ -183,5 +205,5 @@ int main(int argc, char *argv[]) {
   MPI_Finalize();
 #endif
 
-  return 0;
+  return EXIT_SUCCESS;
 }

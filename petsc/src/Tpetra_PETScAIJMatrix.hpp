@@ -432,6 +432,7 @@ void PETScAIJMatrix<Scalar,LO,GO,Node>::getLocalDiagCopy(Vector<Scalar,LO,GO,Nod
   size_t nlocal = getDomainMap()->getNodeNumElements();
 
   // Get PETSc's diagonal
+  ierr = MatCreateVecs(Amat_,&v,NULL);CHKERRV(ierr);
   ierr = MatGetDiagonal(Amat_,v);CHKERRV(ierr);
   ierr = VecGetArray(v,&diagonal);CHKERRV(ierr);
 
@@ -440,6 +441,8 @@ void PETScAIJMatrix<Scalar,LO,GO,Node>::getLocalDiagCopy(Vector<Scalar,LO,GO,Nod
   {
     diag.replaceLocalValue(i,diagonal[i]);
   }
+
+  ierr = VecDestroy(&v);CHKERRV(ierr);
 }
 
 

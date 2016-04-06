@@ -382,8 +382,8 @@ PETScSolMgr<ScalarType,MV,OP>::PETScSolMgr() :
   numIters_(0),
   verbosity_(verbosity_default_),
   assertPositiveDefiniteness_(assertPositiveDefiniteness_default_),
-  label_(label_default_),
   solver_(solver_default_),
+  label_(label_default_),
   isSet_(false),
   argc_(0)
 {}
@@ -402,8 +402,8 @@ PETScSolMgr( const Teuchos::RCP<LinearProblem<ScalarType,MV,OP> > &problem,
   numIters_(0),
   verbosity_(verbosity_default_),
   assertPositiveDefiniteness_(assertPositiveDefiniteness_default_),
-  label_(label_default_),
   solver_(solver_default_),
+  label_(label_default_),
   isSet_(false),
   argc_(0)
 {

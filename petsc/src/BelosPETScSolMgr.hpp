@@ -616,7 +616,6 @@ ReturnType PETScSolMgr<ScalarType,MV,OP>::solve()
   ierr = KSPSetFromOptions(solver); CHKERRCONTINUE(ierr);
 
   // Select which solver we use
-  std::cout << "solver: " << solver << std::endl;
   ierr = KSPSetType(solver, solver_.c_str()); CHKERRCONTINUE(ierr);
 
   // Tell the solver not to zero out the initial vector

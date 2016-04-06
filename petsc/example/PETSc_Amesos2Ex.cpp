@@ -128,7 +128,7 @@ int main(int argc,char **args)
   // Copy the matrix from a PETSc data structure to a Tpetra CrsMatrix
   // Note that this is actually copying the data rather than wrapping it
   //
-  RCP<CrsMatrix> epA = xSDKTrilinos::deepCopyPETScAIJMatrixToTpetraCrsMatrix<Scalar,LO,GO,Node>(A);
+  RCP<CrsMatrix> tpetraA = xSDKTrilinos::deepCopyPETScAIJMatrixToTpetraCrsMatrix<Scalar,LO,GO,Node>(A);
 
   //
   // Create a random solution vector and corresponding right-hand-side
@@ -157,7 +157,7 @@ int main(int argc,char **args)
   //
   // Create an Amesos2 linear solver
   //
-  RCP<Solver> solver = Amesos2::create<CrsMatrix,MV>("KLU2", epA, tpetraX, tpetraB);
+  RCP<Solver> solver = Amesos2::create<CrsMatrix,MV>("KLU2", tpetraA, tpetraX, tpetraB);
   solver->symbolicFactorization();
   solver->numericFactorization();
 
@@ -167,17 +167,35 @@ int main(int argc,char **args)
   solver->solve();
 
   //
-  // Print the obtained and true solutions
+  // Check the residual
   //
-  ierr = VecView(x,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
-  Teuchos::FancyOStream fancyStream(Teuchos::rcpFromRef(std::cout));
-  tpetraX->describe(fancyStream,Teuchos::VERB_EXTREME);
-
+  Vector R( tpetraA->getRowMap() );
+  tpetraA->apply(*tpetraX,R);
+  R.update(1,*tpetraB,-1);
+  std::vector<double> normR(1), normB(1);
+  R.norm2(normR);
+  tpetraB->norm2(normB);
+  if(rank == 0) std::cout << "Relative residual: " << normR[0] / normB[0] << std::endl;
+  if(normR[0] / normB[0] > 1e-8)
+    return EXIT_FAILURE;
+  
+  //
+  // Check the error
+  //
+  RCP<Vector> trueX = xSDKTrilinos::deepCopyPETScVecToTpetraVector<Scalar,LO,GO,Node>(x);
+  Vector errorVec( tpetraA->getRowMap() );
+  errorVec.update(1,*tpetraX,-1,*trueX,0);
+  std::vector<double> normErrorVec(1);
+  errorVec.norm2(normErrorVec);
+  if(rank == 0) std::cout << "Error: " << normErrorVec[0] << std::endl;
+  if(normErrorVec[0] > 1e-8)
+    return EXIT_FAILURE;
+  
   //
   // Terminate PETSc
   //
   ierr = PetscFinalize(); CHKERRQ(ierr);
-  return 0;
+  return EXIT_SUCCESS;
 } /*main*/
 
 /* ***************************************************************** */

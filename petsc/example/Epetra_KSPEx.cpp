@@ -98,7 +98,7 @@ int main(int argc, char *argv[]) {
   MT tol = 1.0e-4;           // relative residual tolerance
 
   Teuchos::CommandLineProcessor cmdp(false,false);
-  cmdp.setOption("filename",&filename,"Filename for test matrix.  Acceptable file extensions: *.hb,*.mtx,*.triU,*.triS");
+  cmdp.setOption("filename",&filename,"Filename for test matrix.");
   cmdp.setOption("tol",&tol,"Relative residual tolerance used by GMRES solver.");
   cmdp.setOption("num-rhs",&numrhs,"Number of right-hand sides to be solved for.");
   if (cmdp.parse(argc,argv) != Teuchos::CommandLineProcessor::PARSE_SUCCESSFUL) {
@@ -109,12 +109,12 @@ int main(int argc, char *argv[]) {
   // Get the matrix from a file
   //
   Epetra_CrsMatrix* A;
-  RCP<Epetra_MultiVector> B, X, trueX;
   EpetraExt::MatrixMarketFileToCrsMatrix(filename.c_str(), Comm, A, false);
 
   //
   // Create a random RHS and set the initial guess to 0
   //
+  RCP<Epetra_MultiVector> B, X, trueX;
   X = rcp( new Epetra_MultiVector( A->RowMap(), numrhs ) );
   trueX = rcp( new Epetra_MultiVector( A->RowMap(), numrhs ) );
   B = rcp( new Epetra_MultiVector( A->RowMap(), numrhs ) );
@@ -141,7 +141,7 @@ int main(int argc, char *argv[]) {
   RCP<Belos::EpetraPrecOp> belosPrec = rcp( new Belos::EpetraPrecOp( Prec ) );
 
   //
-  // Create parameter list for the block GMRES solver manager
+  // Create parameter list for the GMRES solver manager
   //
   ParameterList belosList;
   int maxiters = 100;

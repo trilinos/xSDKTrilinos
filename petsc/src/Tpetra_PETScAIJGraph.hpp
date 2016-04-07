@@ -223,7 +223,6 @@ PETScAIJGraph<LO,GO,Node>::PETScAIJGraph(Mat PETScMat)
   MatType type;
   MatInfo info;
   PetscInt PETScCols, PETScLocalCols, rowStart;
-  Mat OffDiagonal;
 
   // Wrap the communicator in a Teuchos Comm
 #ifdef HAVE_MPI
@@ -264,8 +263,16 @@ PETScAIJGraph<LO,GO,Node>::PETScAIJGraph(Mat PETScMat)
 
   // Get the GIDs of the non-local columns
   const PetscInt * garray;
-  ierr = MatMPIAIJGetSeqAIJ(PETScMat,NULL,&OffDiagonal,&garray); CHKERRV(ierr);
-  ierr = MatGetSize(OffDiagonal,NULL,&PETScCols); CHKERRV(ierr);
+  if(strcmp(type,MATMPIAIJ) == 0)
+  {
+    Mat OffDiagonal;
+    ierr = MatMPIAIJGetSeqAIJ(PETScMat,NULL,&OffDiagonal,&garray); CHKERRV(ierr);
+    ierr = MatGetSize(OffDiagonal,NULL,&PETScCols); CHKERRV(ierr);
+  }
+  else
+  {
+    PETScCols=0;
+  }
   numLocalCols_ = PETScLocalCols+PETScCols;
 
 //  for(size_t i=0; i<10; i++) std::cerr << "garray[" << i << "] = " << garray[i] << std::endl;

@@ -42,23 +42,18 @@
 // @HEADER
 
 /*
-   This example demonstrates how to use a PETSc KSP linear solver with
-   an Ifpack2  to compute the
-   eigenpairs of a PETSc matrix.
+   This example demonstrates how to use Ifpack2 and Belos with a PETSc Mat.
 
-   The PETSc matrix is a 2D 5-point Laplace operator stored in AIJ format.
-   This matrix is wrapped as an PETScAIJMatrix.  The associated eigenvalue
-   problem is solved using Anasazi.
-
-   To invoke this example, use something like:
-
-       mpirun -np 5 ./AnasaziTest.exe -mx 150 -my 150
+   The PETSc matrix has the same sparsity pattern as a 2D 5-point Laplace 
+   operator, but with random entries on the diagonal.
+   This matrix is wrapped as an PETScAIJMatrix.  The associated linear system
+   is solved with Belos using an Ifpack2 preconditioner.
 */
 
 #include "BelosConfigDefs.hpp"
 #include "BelosLinearProblem.hpp"
 #include "BelosTpetraAdapter.hpp"
-#include "BelosPETScSolMgr.hpp"
+#include "BelosMinresSolMgr.hpp"
 
 #include "Ifpack2_Factory.hpp"
 
@@ -69,155 +64,158 @@
 #include "Tpetra_CrsMatrix.hpp"
 #include "Tpetra_DefaultPlatform.hpp"
 #include "Tpetra_MultiVector.hpp"
-#include "MatrixMarket_Tpetra.hpp"
+#include "Tpetra_PETScAIJMatrix.hpp"
 
-int main(int argc, char *argv[]) {
-  typedef double                            ST;
-  typedef Teuchos::ScalarTraits<ST>        SCT;
-  typedef SCT::magnitudeType                MT;
-  typedef Tpetra::MultiVector<>             MV;
-  typedef Tpetra::Operator<>                OP;
-  typedef Belos::MultiVecTraits<ST,MV>     MVT;
-  typedef Belos::OperatorTraits<ST,MV,OP>  OPT;
-  typedef Tpetra::CrsMatrix<>              CrsMatrix;
-  typedef Ifpack2::Preconditioner<>        Prec;
+int main(int argc, char *args[]) {
+  typedef Tpetra::PETScAIJMatrix<>              PETScAIJMatrix;
+  typedef PETScAIJMatrix::scalar_type           Scalar;
+  typedef PETScAIJMatrix::local_ordinal_type    LO;
+  typedef PETScAIJMatrix::global_ordinal_type   GO;
+  typedef PETScAIJMatrix::node_type             Node;
+  typedef Tpetra::Vector<Scalar,LO,GO>          Vector;
+  typedef Tpetra::Operator<Scalar,LO,GO>        OP;
+  typedef Tpetra::MultiVector<Scalar,LO,GO>     MV;
+  typedef Ifpack2::Preconditioner<Scalar,LO,GO> Prec;
 
   using Teuchos::ParameterList;
   using Teuchos::RCP;
   using Teuchos::rcp;
 
-  // ************************* Initialize MPI **************************
-  Teuchos::oblackholestream blackhole;
-  Teuchos::GlobalMPISession mpiSession (&argc, &argv, &blackhole);
+  Vec            x,b;           /* approx solution, RHS, exact solution */
+  Mat            A;             /* linear system matrix */
+  PetscRandom    rctx;          /* random number generator context */
+  PetscInt       i,j,Ii,J,Istart,Iend;
+  PetscInt       m = 4,n = 4;   /* #mesh points in x & y directions, resp. */
+  PetscErrorCode ierr;
+  PetscScalar    v;
+  PetscInt       rank=0;
+  MPI_Comm       comm;
 
-  // ************** Get the default communicator and node **************
-  RCP<const Teuchos::Comm<int> > comm = Tpetra::DefaultPlatform::getDefaultPlatform().getComm();
-  const int myRank = comm->getRank();
+  //
+  // Start PETSc 
+  //
+  PetscInitialize(&argc,&args,NULL,NULL);
 
-  bool verbose = true;
-  bool success = true;
-  bool proc_verbose = false;
-  bool leftprec = true;      // left preconditioning or right.
-  int frequency = -1;        // frequency of status test output.
-  int numrhs = 1;            // number of right-hand sides to solve for
-  int maxiters = -1;         // maximum number of iterations allowed per linear system
-  std::string filename("cage4.mtx");
-  MT tol = 1.0e-5;           // relative residual tolerance
+  //
+  // Create the matrix
+  //
+  ierr = MatCreate(PETSC_COMM_WORLD,&A);CHKERRQ(ierr);
+  ierr = MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE,m*n,m*n);CHKERRQ(ierr);
+  ierr = MatSetType(A, MATAIJ);CHKERRQ(ierr);
+  ierr = MatMPIAIJSetPreallocation(A,5,PETSC_NULL,5,PETSC_NULL);CHKERRQ(ierr);
+  ierr = MatSetUp(A);CHKERRQ(ierr);
+  PetscObjectGetComm( (PetscObject)A, &comm);
+  ierr = MPI_Comm_rank(comm,&rank);CHKERRQ(ierr);
 
-  // ***************** Read the command line arguments *****************
-  Teuchos::CommandLineProcessor cmdp(false,false);
-  cmdp.setOption("verbose","quiet",&verbose,"Print messages and results.");
-  cmdp.setOption("left-prec","right-prec",&leftprec,"Left preconditioning or right.");
-  cmdp.setOption("frequency",&frequency,"Solvers frequency for printing residuals (#iters).");
-  cmdp.setOption("filename",&filename,"Filename for test matrix.  Acceptable file extensions: *.hb,*.mtx,*.triU,*.triS");
-  cmdp.setOption("tol",&tol,"Relative residual tolerance used by GMRES solver.");
-  cmdp.setOption("num-rhs",&numrhs,"Number of right-hand sides to be solved for.");
-  cmdp.setOption("max-iters",&maxiters,"Maximum number of iterations per linear system (-1 = adapted to problem/block size).");
-  if (cmdp.parse(argc,argv) != Teuchos::CommandLineProcessor::PARSE_SUCCESSFUL) {
-    return -1;
+  ierr = MatGetOwnershipRange(A,&Istart,&Iend);CHKERRQ(ierr);
+  for (Ii=Istart; Ii<Iend; Ii++) {
+    v = -1.0; i = Ii/n; j = Ii - i*n;
+    if (i>0)   {J = Ii - n; ierr = MatSetValues(A,1,&Ii,1,&J,&v,INSERT_VALUES);CHKERRQ(ierr);}
+    if (i<m-1) {J = Ii + n; ierr = MatSetValues(A,1,&Ii,1,&J,&v,INSERT_VALUES);CHKERRQ(ierr);}
+    if (j>0)   {J = Ii - 1; ierr = MatSetValues(A,1,&Ii,1,&J,&v,INSERT_VALUES);CHKERRQ(ierr);}
+    if (j<n-1) {J = Ii + 1; ierr = MatSetValues(A,1,&Ii,1,&J,&v,INSERT_VALUES);CHKERRQ(ierr);}
+    v = rand(); ierr = MatSetValues(A,1,&Ii,1,&Ii,&v,INSERT_VALUES);CHKERRQ(ierr);
   }
-  if (!verbose)
-    frequency = -1;  // reset frequency if test is not verbose
-  proc_verbose = verbose && (myRank==0); /* Only print on the zero processor */
 
-  // ************************* Get the problem *************************
-  RCP<CrsMatrix> A = Tpetra::MatrixMarket::Reader<CrsMatrix>::readSparseFile(filename,comm);
-  RCP<MV> B = rcp(new MV(A->getRowMap(),numrhs,false));
-  RCP<MV> X = rcp(new MV(A->getRowMap(),numrhs,false));
-  OPT::Apply(*A, *X, *B);
-  MVT::MvInit(*X);
-  MVT::MvInit(*B,1);
+  ierr = MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
+  ierr = MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
 
-  // ******************** Construct preconditioner *********************
+  //
+  // Wrap the PETSc matrix as a PETScAIJMatrix. This is lightweight,
+  // i.e., no deep data copies.
+  //
+  RCP<PETScAIJMatrix> tpetraA = rcp(new PETScAIJMatrix(A));
+
+  //
+  // Create a random solution vector and corresponding right-hand-side
+  //
+  ierr = VecCreate(PETSC_COMM_WORLD,&x);CHKERRQ(ierr);
+  ierr = VecSetSizes(x,PETSC_DECIDE,m*n);CHKERRQ(ierr);
+  ierr = VecSetFromOptions(x);CHKERRQ(ierr);
+  ierr = PetscRandomCreate(PETSC_COMM_WORLD,&rctx);CHKERRQ(ierr);
+  ierr = PetscRandomSetFromOptions(rctx);CHKERRQ(ierr);
+  ierr = VecSetRandom(x,rctx);CHKERRQ(ierr);
+  ierr = PetscRandomDestroy(&rctx);CHKERRQ(ierr);
+  ierr = VecDuplicate(x,&b);CHKERRQ(ierr);
+  ierr = MatMult(A,x,b);CHKERRQ(ierr);
+
+  //
+  // Copy the PETSc vectors to Tpetra vectors
+  //
+  RCP<Vector> tpetraX = xSDKTrilinos::deepCopyPETScVecToTpetraVector<Scalar,LO,GO,Node>(x);
+  RCP<Vector> tpetraB = xSDKTrilinos::deepCopyPETScVecToTpetraVector<Scalar,LO,GO,Node>(b);
+
+  //
+  // Set initial guess to 0
+  //
+  tpetraX->putScalar(0);
+
+  //
+  // Construct preconditioner
+  //
   Ifpack2::Factory factory;
-  RCP<Prec> M = factory.create("RELAXATION", A.getConst());
+  RCP<Prec> M = factory.create("RELAXATION", tpetraA.getConst());
   ParameterList ifpackParams;
   ifpackParams.set("relaxation: type","Jacobi");
   M->setParameters(ifpackParams);
   M->initialize();
   M->compute();
 
-  // ******* Create parameter list for the Belos solver manager ********
-  const int NumGlobalElements = MVT::GetGlobalLength(*B);
-  if (maxiters == -1)
-    maxiters = NumGlobalElements - 1; // maximum number of iterations to run
+  //
+  // Create parameter list for the Belos solver manager
   //
   ParameterList belosList;
-  belosList.set( "Maximum Iterations", maxiters );       // Maximum number of iterations allowed
-  belosList.set( "Convergence Tolerance", tol );         // Relative convergence tolerance requested
-  if (numrhs > 1) {
-    belosList.set( "Show Maximum Residual Norm Only", true );  // Show only the maximum residual norm
-  }
-  if (verbose) {
-    belosList.set( "Verbosity", Belos::Errors + Belos::Warnings +
-		   Belos::TimingDetails + Belos::StatusTestDetails );
-    if (frequency > 0)
-      belosList.set( "Output Frequency", frequency );
-  }
-  else
-    belosList.set( "Verbosity", Belos::Errors + Belos::Warnings + Belos::FinalSummary );
+  belosList.set( "Maximum Iterations", 100 );            // Maximum number of iterations allowed
+  belosList.set( "Convergence Tolerance", 1e-6 );        // Relative convergence tolerance requested
+  belosList.set( "Verbosity", Belos::IterationDetails + Belos::TimingDetails );
 
-  // ************ Construct a preconditioned linear problem ************
+  //
+  // Construct a preconditioned linear problem 
+  //
   RCP<Belos::LinearProblem<double,MV,OP> > problem
-    = rcp( new Belos::LinearProblem<double,MV,OP>( A, X, B ) );
-  if (leftprec) {
-    problem->setLeftPrec( M );
-  }
-  else {
-    problem->setRightPrec( M );
-  }
-  bool set = problem->setProblem();
-  if (set == false) {
-    if (proc_verbose)
-      std::cout << std::endl << "ERROR:  Belos::LinearProblem failed to set up correctly!" << std::endl;
-    return -1;
-  }
+    = rcp( new Belos::LinearProblem<double,MV,OP>( tpetraA, tpetraX, tpetraB ) );
+  problem->setLeftPrec( M );
+  problem->setProblem();
 
-  // **************** Create an iterative solver manager ***************
-  RCP< Belos::PETScSolMgr<double,MV,OP> > solver
-    = rcp( new Belos::PETScSolMgr<double,MV,OP>(problem, rcp(&belosList,false)) );
-  solver->setCLA(argc,argv);
+  //
+  // Create an iterative solver manager 
+  //
+  RCP< Belos::MinresSolMgr<double,MV,OP> > solver
+    = rcp( new Belos::MinresSolMgr<double,MV,OP>(problem, rcp(&belosList,false)) );
 
-  // ****************** Start the block CG iteration *******************
-  if (proc_verbose) {
-    std::cout << std::endl << std::endl;
-    std::cout << "Dimension of matrix: " << NumGlobalElements << std::endl;
-    std::cout << "Number of right-hand sides: " << numrhs << std::endl;
-    std::cout << "Max number of Krylov iterations: " << maxiters << std::endl;
-    std::cout << "Relative residual tolerance: " << tol << std::endl;
-    std::cout << std::endl;
-  }
+  //
+  // Perform solve 
+  //
+  solver->solve();
 
-  // ************************** Perform solve **************************
-  Belos::ReturnType ret = solver->solve();
-
-  // ********************* Compute actual residuals ********************
-  bool badRes = false;
-  std::vector<double> actual_resids( numrhs );
-  std::vector<double> rhs_norm( numrhs );
-  RCP<MV> resid = MVT::Clone(*X, numrhs);
-  OPT::Apply( *A, *X, *resid );
-  MVT::MvAddMv( -1.0, *resid, 1.0, *B, *resid );
-  MVT::MvNorm( *resid, actual_resids );
-  MVT::MvNorm( *B, rhs_norm );
-  if (proc_verbose) {
-    std::cout<< "---------- Actual Residuals (normalized) ----------"<<std::endl<<std::endl;
-    for ( int i=0; i<numrhs; i++) {
-      double actRes = actual_resids[i]/rhs_norm[i];
-      std::cout<<"Problem "<<i<<" : \t"<< actRes <<std::endl;
-      if (actRes > tol) badRes = true;
-    }
-  }
-
-if (ret!=Belos::Converged || badRes) {
-  success = false;
-  if (proc_verbose)
-    std::cout << std::endl << "ERROR:  Belos did not converge!" << std::endl;
-} else {
-  success = true;
-  if (proc_verbose)
-    std::cout << std::endl << "SUCCESS:  Belos converged!" << std::endl;
-}
-
-return success ? EXIT_SUCCESS : EXIT_FAILURE;
+  //
+  // Check the residual
+  //
+  Vector R( tpetraA->getRowMap() );
+  tpetraA->apply(*tpetraX,R);
+  R.update(1,*tpetraB,-1);
+  std::vector<double> normR(1), normB(1);
+  R.norm2(normR);
+  tpetraB->norm2(normB);
+  if(rank == 0) std::cout << "Relative residual: " << normR[0] / normB[0] << std::endl;
+  if(normR[0] / normB[0] > 1e-8)
+    return EXIT_FAILURE;
+  
+  //
+  // Check the error
+  //
+  RCP<Vector> trueX = xSDKTrilinos::deepCopyPETScVecToTpetraVector<Scalar,LO,GO,Node>(x);
+  Vector errorVec( tpetraA->getRowMap() );
+  errorVec.update(1,*tpetraX,-1,*trueX,0);
+  std::vector<double> normErrorVec(1);
+  errorVec.norm2(normErrorVec);
+  if(rank == 0) std::cout << "Error: " << normErrorVec[0] << std::endl;
+  if(normErrorVec[0] > 1e-8)
+    return EXIT_FAILURE;
+  
+  //
+  // Terminate PETSc
+  //
+  ierr = PetscFinalize(); CHKERRQ(ierr);
+  return EXIT_SUCCESS;
 }

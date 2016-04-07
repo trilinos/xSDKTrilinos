@@ -3,23 +3,23 @@ PETSc datatypes with Trilinos packages that require a Tpetra::CrsMatrix.  One
 such package is Amesos2, which contains a variety of direct solvers (and
 interfaces to external direct solvers).  In this example, we will solve a linear
 system $Ax=b$ where $A$ is the 2D discretization of the Poisson operator on a
-unit cube, and $b$ is a random vector.
+unit square, and $b$ is a random vector.
 
 \begin{lstinputlisting}[caption=PETSc\_Amesos2Ex.cpp,label=PETSc_Amesos2Ex.cpp]{src/PETSc_Amesos2Ex.cpp}
 \end{lstinputlisting}
 
-\paragraph{Lines 1--65}
-These lines are very similar to the previous example.  We set up convenient
-typedefs, read in the command line arguments with PETSc (in this case, the x
-and y dimensions of the grid), and set up the Poisson2D matrix.
+\paragraph{Lines 1--71}
+These lines are very similar to the previous example, where we set up convenient
+typedefs and create the PETSc Poisson2D matrix.
 
-\paragraph{Lines 67--73}
-Create the initial guess for $x$ and the random RHS $b$.
+\paragraph{Lines 74--82}
+Create a random solution vector $x$ and its corresponding RHS $b$.
 
-\paragraph{Lines 75--77}
-Copy the PETSc Mat and Vecs to Tpetra::CrsMatrix and Tpetra::Vector, so that
-we can use them with the Amesos2 linear solvers.
+\paragraph{Lines 85--89}
+Deep copy the PETSc Mat and Vecs to Tpetra::CrsMatrix and Tpetra::Vector, so
+that we can use them with the Amesos2 linear solvers, which require a
+Tpetra::CrsMatrix.
 
-\paragraph{Lines 79--82}
+\paragraph{Lines 95--100}
 Create an Amesos2 linear solver, specifically the native solver KLU2.  Perform
 the symbolic and numeric factorizations, then solve the linear system.

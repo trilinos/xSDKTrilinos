@@ -5,35 +5,44 @@ code.
 \begin{lstinputlisting}[caption=Tpetra\_KSPEx.cpp,label=Tpetra_KSPEx.cpp]{src/Tpetra_KSPEx.cpp}
 \end{lstinputlisting}
 
-\paragraph{Lines 1--9}
+\paragraph{Lines 1--12}
 Include statements
 
-\paragraph{Lines 12--24}
+\paragraph{Lines 15--22}
 Typedefs and using statements to make the code more readable
 
-\paragraph{Lines 26--29}
-Set up MPI
+\paragraph{Lines 25--29}
+Set up MPI and get the default communicator.
 
-\paragraph{Lines 31--40} 
+\paragraph{Lines 32--43} 
 Parse command line arguments.  This program allows the user to specify the
-filename for the matrix, the tolerance for the linear solve, and which linear
-solver is used.  A list of all valid linear solver options can be found at
-\url{http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/KSP/KSPType.html}.
+filename for the matrix, the tolerance for the linear solve, the maximum number
+of iterations, and the number of right hand sides for the linear system.
 
-\paragraph{Lines 42--46}
-Set up the linear system by reading the matrix from a file, setting the initial
-guess for the solution as $\vec{0}$ and setting the right hand side as
-$\vec{1}$.
+\paragraph{Lines 46--54}
+Set up the linear system by reading the matrix from a file, creating a
+random solution and setting the right hand side accordingly.  The initial
+guess for the solution is set to $\vec{0}$.
 
-\paragraph{Lines 48--54}
+\paragraph{Lines 57--63}
 Set up the Ifpack2 Jacobi preconditioner.
 
-\paragraph{Lines 56--59}
-Set the maximum number of iterations, convergence tolerance, and which PETSc
-KSP solver is being used.
+\paragraph{Lines 66--70}
+Set the Belos parameters via a Teuchos::ParameterList. We set the maximum number
+of iterations, convergence tolerance, and which PETSc KSP solver is being used. 
+Here we chose BiCGStab, but a list of all valid linear solver options can be
+found at \url{http://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/KSP/KSPType.html}.
+We also set the verbosity to IterationDetails, meaning PETSc will print the
+residual norm at each iteration.
 
-\paragraph{Lines 61--64}
+\paragraph{Lines 73--76}
 Set up the linear problem for the Belos solver.
 
-\paragraph{Lines 66-68}
-Solve the linear system.
+\paragraph{Lines 79--80}
+Create the linear solver.  Note that even though PETSc is being used to solve
+the linear system, you construct and use a Belos Solver Manager as you would for
+any of the native Krylov solvers.
+
+\paragraph{Line 83}
+Solve the linear system.  The solution will overwrite the initial guess vector
+$X$.

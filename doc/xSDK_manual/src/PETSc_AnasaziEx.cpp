@@ -13,19 +13,19 @@ int main(int argc,char **args)
   using std::cout;
   using std::endl;
 
-  typedef Tpetra::PETScAIJMatrix<>                  PETScAIJMatrix;
-  typedef PETScAIJMatrix::scalar_type               Scalar;
-  typedef PETScAIJMatrix::local_ordinal_type        LO;
-  typedef PETScAIJMatrix::global_ordinal_type       GO;
-  typedef PETScAIJMatrix::node_type                 Node;
-  typedef Tpetra::Vector<Scalar,LO,GO,Node>         Vector;
-  typedef Tpetra::Map<LO,GO,Node>                   Map;
-  typedef Tpetra::Operator<Scalar,LO,GO,Node>       OP;
-  typedef Tpetra::MultiVector<Scalar,LO,GO,Node>    MV;
-  typedef Anasazi::RTRSolMgr<Scalar,MV,OP>          SolMgr;
+  typedef Tpetra::PETScAIJMatrix<>           PETScAIJMatrix;
+  typedef PETScAIJMatrix::scalar_type                Scalar;
+  typedef PETScAIJMatrix::local_ordinal_type             LO;
+  typedef PETScAIJMatrix::global_ordinal_type            GO;
+  typedef PETScAIJMatrix::node_type                    Node;
+  typedef Tpetra::Vector<Scalar,LO,GO,Node>          Vector;
+  typedef Tpetra::Map<LO,GO,Node>                       Map;
+  typedef Tpetra::Operator<Scalar,LO,GO,Node>            OP;
+  typedef Tpetra::MultiVector<Scalar,LO,GO,Node>         MV;
+  typedef Anasazi::RTRSolMgr<Scalar,MV,OP>           SolMgr;
   typedef Anasazi::BasicEigenproblem<Scalar,MV,OP>  Problem;
-  typedef Anasazi::OperatorTraits<Scalar,MV,OP>     OPT;
-  typedef Anasazi::MultiVecTraits<Scalar,MV>        MVT;
+  typedef Anasazi::OperatorTraits<Scalar,MV,OP>         OPT;
+  typedef Anasazi::MultiVecTraits<Scalar,MV>            MVT;
 
   Mat            A;
   PetscInt       m = 50,n = 50;
@@ -33,13 +33,12 @@ int main(int argc,char **args)
   PetscErrorCode ierr;
   MPI_Comm       comm;
   PetscInt       Istart, Iend, Ii, i, j, J, rank;
-  PetscScalar    v;
+  PetscScalar    v, tol=1e-6;
 
+  // Initialize PETSc
   PetscInitialize(&argc,&args,NULL,NULL);
-  ierr = PetscOptionsGetInt(PETSC_NULL,"-mx",&m,PETSC_NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsGetInt(PETSC_NULL,"-my",&n,PETSC_NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsGetInt(PETSC_NULL,"-nev",&nev,PETSC_NULL);CHKERRQ(ierr);
 
+  // Create the matrix
   ierr = MatCreate(PETSC_COMM_WORLD,&A);CHKERRQ(ierr);
   ierr = MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE,m*n,m*n);CHKERRQ(ierr);
   ierr = MatSetType(A, MATAIJ);CHKERRQ(ierr);
@@ -49,6 +48,7 @@ int main(int argc,char **args)
   ierr = MPI_Comm_rank(comm,&rank);CHKERRQ(ierr);
 
   ierr = MatGetOwnershipRange(A,&Istart,&Iend);CHKERRQ(ierr);
+
   for (Ii=Istart; Ii<Iend; Ii++) { 
     v = -1.0; i = Ii/n; j = Ii - i*n;  
     if (i>0)   {J = Ii - n; ierr = MatSetValues(A,1,&Ii,1,&J,&v,INSERT_VALUES);CHKERRQ(ierr);}
@@ -61,26 +61,43 @@ int main(int argc,char **args)
   ierr = MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
   ierr = MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
 
+  // Wrap the PETSc matrix as a PETScAIJMatrix.
   RCP<PETScAIJMatrix> tpetraA = rcp(new PETScAIJMatrix(A));
 
+  // Create an initial guess
   RCP<MV> initGuess = rcp(new MV(tpetraA->getDomainMap(),4,false));
   initGuess->randomize();
 
+  // Create an eigenproblem
   RCP<Problem> problem = rcp(new Problem(tpetraA,initGuess));
   problem->setNEV(nev);
   problem->setHermitian(true);
   problem->setProblem();
 
+  // Create the parameter list
   Teuchos::ParameterList pl;
   pl.set("Verbosity", Anasazi::IterationDetails + Anasazi::FinalSummary);
-  pl.set("Convergence Tolerance", 1e-6);
+  pl.set("Convergence Tolerance", tol);
+
+  // Create an Anasazi eigensolver
   RCP<SolMgr> solver = rcp(new SolMgr(problem, pl));
 
+  // Solve the problem to the specified tolerances
   Anasazi::ReturnType returnCode = solver->solve();
+  if (returnCode != Anasazi::Converged && rank == 0) {
+    cout << "Anasazi::EigensolverMgr::solve() returned unconverged." << endl;
+    return EXIT_FAILURE;
+  }
+  else if (rank == 0)
+    cout << "Anasazi::EigensolverMgr::solve() returned converged." << endl;
+
+  // Get the eigenvalues and eigenvectors from the eigenproblem
   Anasazi::Eigensolution<Scalar,MV> sol = problem->getSolution();
   std::vector<Anasazi::Value<Scalar> > evals = sol.Evals;
   RCP<MV> evecs = sol.Evecs;
+  int numev = sol.numVecs;
 
+  // Terminate PETSc
   ierr = PetscFinalize();CHKERRQ(ierr);
-  return 0;
+  return EXIT_SUCCESS;
 }

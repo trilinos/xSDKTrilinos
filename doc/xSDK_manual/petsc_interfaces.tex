@@ -4,9 +4,9 @@ use PETSc datatypes with Trilinos and vice-versa.
 
 \subsection{Using PETSc Mat and Vec with Trilinos solvers}
 Trilinos has two new interfaces to support using PETSc Mat anywhere
-a Tpetra::RowMatrix or Tpetra::CrsMatrix can be used.  For packages requiring a
-Tpetra::RowMatrix or Tpetra::Operator, such as Anasazi and Belos, you may wrap a
-PETSc Mat in a Tpetra::PETScAIJMatrix; otherwise, you can copy it to a
+a Tpetra::Row\-Matrix or Tpetra::CrsMatrix can be used.  For packages requiring
+a Tpetra::RowMatrix or Tpetra::Operator, such as Anasazi and Belos, you may wrap a
+PETSc Mat in a Tpetra::PETSc\-AIJ\-Matrix; otherwise, you can copy it to a
 Tpetra::CrsMatrix.  We will demonstrate each of those functions in the examples
 below.
 
@@ -20,7 +20,7 @@ data is wrapped.  If you need a CrsMatrix specifically, the data is deep-copied.
 
 \subsection{Using Trilinos datatypes with PETSc KSP solvers}
 If you would like to use Trilinos datatypes, such as Tpetra::Operator and
-Tpetra::MultiVector, with a PETSc KSP linear solver, you may use the new
+Tpetra::Multi\-Vector, with a PETSc KSP linear solver, you may use the new
 Belos\footnote{Belos is the iterative solver package of Trilinos.} interface:
 PETScSolMgr.  This interface is very similar to that of the other native Belos
 linear solvers, which makes solving linear systems such as $AX=B$ a simple

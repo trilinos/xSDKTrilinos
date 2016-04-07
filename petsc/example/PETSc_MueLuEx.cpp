@@ -297,7 +297,7 @@ PetscErrorCode ShellApplyML(PC pc,Vec x,Vec y)
   ArrayView<const PetscScalar> xView(xvals,length);
   ArrayView<PetscScalar> yView(yvals,length);
 
-  Vector tpetraX(mlp->getDomainMap(),xView); // TODO: see if there is a way to avoid copying the data
+  Vector tpetraX(mlp->getDomainMap(),xView);
   Vector tpetraY(mlp->getDomainMap(),yView);
 
   /* Apply ML. */

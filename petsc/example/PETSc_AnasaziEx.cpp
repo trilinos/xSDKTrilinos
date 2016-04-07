@@ -46,12 +46,8 @@
    eigenpairs of a PETSc matrix.
 
    The PETSc matrix is a 2D 5-point Laplace operator stored in AIJ format.
-   This matrix is wrapped as an PETScAIJMatrix.  The associated eigenvalue
+   This matrix is wrapped as a PETScAIJMatrix.  The associated eigenvalue
    problem is solved using Anasazi.
-
-   To invoke this example, use something like:
-
-       mpirun -np 5 ./AnasaziTest.exe -mx 150 -my 150
 */
 
 #include "petscksp.h"
@@ -84,22 +80,18 @@ int main(int argc,char **args)
   typedef Anasazi::OperatorTraits<Scalar,MV,OP>     OPT;
   typedef Anasazi::MultiVecTraits<Scalar,MV>        MVT;
 
-  Mat            A;        /* PETSc matrix */
+  Mat            A;             /* PETSc matrix */
   PetscInt       m = 50,n = 50; /* #mesh points in x & y directions, resp. */
   PetscInt       nev = 4;
   PetscErrorCode ierr;
-  MPI_Comm comm;
-  PetscInt Istart, Iend, Ii, i, j, J, rank;
-  PetscScalar v;
-
+  MPI_Comm       comm;
+  PetscInt       Istart, Iend, Ii, i, j, J, rank;
+  PetscScalar    v, tol=1e-6;
 
   //
-  // Initialize PETSc and get the command line arguments
+  // Initialize PETSc 
   //
   PetscInitialize(&argc,&args,NULL,NULL);
-//  ierr = PetscOptionsGetInt(PETSC_NULL,"-mx",&m,PETSC_NULL);CHKERRQ(ierr);
-//  ierr = PetscOptionsGetInt(PETSC_NULL,"-my",&n,PETSC_NULL);CHKERRQ(ierr);
-//  ierr = PetscOptionsGetInt(PETSC_NULL,"-nev",&nev,PETSC_NULL);CHKERRQ(ierr);
 
   //
   // Create the matrix
@@ -151,7 +143,7 @@ int main(int argc,char **args)
   //
   Teuchos::ParameterList pl;
   pl.set("Verbosity", Anasazi::IterationDetails + Anasazi::FinalSummary);
-  pl.set("Convergence Tolerance", 1e-6);
+  pl.set("Convergence Tolerance", tol);
 
   //
   // Create an Anasazi eigensolver
@@ -164,6 +156,7 @@ int main(int argc,char **args)
   Anasazi::ReturnType returnCode = solver->solve();
   if (returnCode != Anasazi::Converged && rank == 0) {
     cout << "Anasazi::EigensolverMgr::solve() returned unconverged." << endl;
+    return EXIT_FAILURE;
   }
   else if (rank == 0)
     cout << "Anasazi::EigensolverMgr::solve() returned converged." << endl;
@@ -179,32 +172,41 @@ int main(int argc,char **args)
   //
   // Compute the residual, just as a precaution
   //
-  if (numev > 0) {
-    RCP<const MV> R = problem->computeCurrResVec();
-    std::vector<Scalar> normR(sol.numVecs);
-    MVT::MvNorm( *R, normR );
+  RCP<const MV> R = problem->computeCurrResVec();
+  std::vector<Scalar> normR(sol.numVecs);
+  MVT::MvNorm( *R, normR );
 
-    if (rank == 0) {
-      cout.setf(std::ios_base::right, std::ios_base::adjustfield);
-      cout<<"Actual Eigenvalues (obtained by Rayleigh quotient) : "<<endl;
-      cout<<"------------------------------------------------------"<<endl;
-      cout<<std::setw(16)<<"Real Part"
-          <<std::setw(16)<<"Error"<<endl;
-      cout<<"------------------------------------------------------"<<endl;
-      for (int i=0; i<numev; i++) {
-        cout<<std::setw(16)<<evals[i].realpart
-            <<std::setw(16)<<normR[i]/evals[i].realpart
-            <<endl;
-      }
-      cout<<"------------------------------------------------------"<<endl;
+  //
+  // Print the residual
+  //
+  if (rank == 0) {
+    cout.setf(std::ios_base::right, std::ios_base::adjustfield);
+    cout<<"Eigenvalues : "<<endl;
+    cout<<"------------------------------------------------------"<<endl;
+    cout<<std::setw(16)<<"Real Part"
+        <<std::setw(16)<<"Error"<<endl;
+    cout<<"------------------------------------------------------"<<endl;
+    for (int i=0; i<numev; i++) {
+      cout<<std::setw(16)<<evals[i].realpart
+          <<std::setw(16)<<normR[i]/evals[i].realpart
+          <<endl;
     }
+    cout<<"------------------------------------------------------"<<endl;
+  }
+
+  //
+  // Check the residual
+  //
+  for(int i=0; i<numev; i++) {
+    if(normR[i]/evals[i].realpart > tol)
+      return EXIT_FAILURE;
   }
 
   //
   // Terminate PETSc
   //
   ierr = PetscFinalize();CHKERRQ(ierr);
-  return 0;
+  return EXIT_SUCCESS;
 } /*main*/
 
 /* ***************************************************************** */

@@ -122,18 +122,18 @@ int main(int argc,char **args)
   // Wrap the PETSc matrix as a PETScAIJMatrix. This is lightweight,
   // i.e., no deep data copies.
   //
-  RCP<PETScAIJMatrix> epA = rcp(new PETScAIJMatrix(A));
+  RCP<PETScAIJMatrix> tpetraA = rcp(new PETScAIJMatrix(A));
 
   //
   // Create an initial guess
   //
-  RCP<MV> initGuess = rcp(new MV(epA->getDomainMap(),4,false));
+  RCP<MV> initGuess = rcp(new MV(tpetraA->getDomainMap(),4,false));
   initGuess->randomize();
 
   //
   // Create an eigenproblem
   //
-  RCP<Problem> problem = rcp(new Problem(epA,initGuess));
+  RCP<Problem> problem = rcp(new Problem(tpetraA,initGuess));
   problem->setNEV(nev);
   problem->setHermitian(true);
   problem->setProblem();

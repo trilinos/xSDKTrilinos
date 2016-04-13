@@ -51,7 +51,8 @@ TRILINOS_DIR_ABS=$(readlink -f $TRILINOS_DIR)
 echo "TRILINOS_DIR_ABS = $TRILINOS_DIR_ABS"
 
 if [ "$PETSC_INSTALL_DIR" == "" ] ; then
-  PETSC_INSTALL_DIR=/home/8vt/localhome/PROJECTS/PETSc.base/install/mpi-debug
+  echo "Error, must set env var PETSC_INSTALL_DIR!"
+  exit 1
 fi
 
 DRIVERS_BASE_DIR=$TRILINOS_DIR_ABS/cmake/ctest/drivers/fissile4
@@ -71,7 +72,7 @@ cmake \
   -D ParMETIS_INCLUDE_DIRS="${PETSC_INSTALL_DIR}/include" \
 -D TPL_ENABLE_SuperLUDist=ON \
   -D SuperLUDist_LIBRARY_DIRS="${PETSC_INSTALL_DIR}/lib" \
-  -D SuperLUDist_LIBRARY_NAMES="superlu_dist_4.1" \
+  -D SuperLUDist_LIBRARY_NAMES="superlu_dist" \
   -D SuperLUDist_INCLUDE_DIRS="${PETSC_INSTALL_DIR}/include" \
 -D TPL_ENABLE_HYPRE=ON \
   -D HYPRE_LIBRARY_DIRS="${PETSC_INSTALL_DIR}/lib" \

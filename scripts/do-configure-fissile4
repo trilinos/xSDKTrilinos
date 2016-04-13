@@ -44,13 +44,10 @@
 #   $ mkdir <some-other-build-dir>
 #   $ cd <some-other-build-dir>/
 #   $ ln -s <this-script> do-configure
-#   $ export TRILINOS_DIR=<trilinos-src-dir>
 #   $ ./do-configure
 #   $ make -j12
 #   $ ctest -j12
 #
-# NOTE: TRILINOS_DIR is just neeed to find the dev env on the Fissile4
-# mahcines.
 
 _ABS_FILE_PATH=`readlink -f $0`
 _SCRIPT_DIR=`dirname $_ABS_FILE_PATH`
@@ -66,15 +63,18 @@ if [ "$TRILINOS_DIR" == "" ] ; then
 fi
 TRILINOS_DIR_ABS=$(readlink -f $TRILINOS_DIR)
 echo "TRILINOS_DIR_ABS = $TRILINOS_DIR_ABS"
+# NOTE: TRILINOS_DIR is only needed for the Dev Env on the Fissile4 machines.
 
 if [ "$TRILINOS_INSTALL_DIR" == "" ] ; then
-  TRILINOS_INSTALL_DIR=/home/8vt/localhome/PROJECTS/Trilinos.base/install/mpi_debug_debug
+  echo "Error, must set env var TRILINOS_INSTALL_DIR!"
+  exit 1
 fi
 TRILINOS_INSTALL_DIR_ABS=$(readlink -f $TRILINOS_INSTALL_DIR)
 echo "TRILINOS_INSTALL_DIR_ABS = $TRILINOS_INSTALL_DIR_ABS"
 
 if [ "$PETSC_INSTALL_DIR" == "" ] ; then
-  PETSC_INSTALL_DIR=/home/8vt/localhome/PROJECTS/PETSc.base/install/mpi-debug
+  echo "Error, must set env var PETSC_INSTALL_DIR!"
+  exit 1
 fi
 echo "PETSC_INSTALL_DIR = $PETSC_INSTALL_DIR"
 

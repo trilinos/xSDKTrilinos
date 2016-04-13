@@ -49,6 +49,8 @@
 #   $ make -j12
 #   $ ctest -j12
 #
+# NOTE: TRILINOS_DIR is just neeed to find the dev env on the Fissile4
+# mahcines.
 
 _ABS_FILE_PATH=`readlink -f $0`
 _SCRIPT_DIR=`dirname $_ABS_FILE_PATH`

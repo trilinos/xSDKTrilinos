@@ -67,6 +67,8 @@ SET(${PROJECT_NAME}_TRIBITS_DIR "${TRIBITS_DIR}"
 INCLUDE("${${PROJECT_NAME}_TRIBITS_DIR}/TriBITS.cmake")
 SET(TEUCHOS_STD_UNIT_TEST_MAIN
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Teuchos_StandardParallelUnitTestMain.cpp")
+FIND_PACKAGE(Trilinos CONFIG REQUIRED)
+# ToDo: Read in the compilers, linker, etc.
 TRIBITS_PROJECT()
 
 

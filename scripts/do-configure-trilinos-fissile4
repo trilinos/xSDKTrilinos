@@ -59,6 +59,7 @@ DRIVERS_BASE_DIR=$TRILINOS_DIR_ABS/cmake/ctest/drivers/fissile4
 
 cmake \
 -D Trilinos_CONFIGURE_OPTIONS_FILE="$DRIVERS_BASE_DIR/gcc-4.8.3-base-options.cmake,$DRIVERS_BASE_DIR/trilinos-tpls-gcc.4.8.3.cmake" \
+-D Trilinos_EXTRA_LINK_FLAGS="-lX11 -lssl -lgomp -Wl,-rpath,/projects/vera/gcc-4.8.3/toolset/gcc-4.8.3/lib64" \
 -D TPL_ENABLE_MPI=ON \
 -D CMAKE_BUILD_TYPE=DEBUG \
 -D Trilinos_ENABLE_TESTS=ON \

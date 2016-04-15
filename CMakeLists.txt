@@ -68,7 +68,14 @@ INCLUDE("${${PROJECT_NAME}_TRIBITS_DIR}/TriBITS.cmake")
 SET(TEUCHOS_STD_UNIT_TEST_MAIN
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Teuchos_StandardParallelUnitTestMain.cpp")
 FIND_PACKAGE(Trilinos CONFIG REQUIRED)
-# ToDo: Read in the compilers, linker, etc.
+SET(CMAKE_CXX_COMPILER ${Trilinos_CXX_COMPILER} CACHE STRING "From TrilinosConfig.cmake")
+SET(CMAKE_C_COMPILER ${Trilinos_C_COMPILER} CACHE STRING "From TrilinosConfig.cmake")
+SET(CMAKE_Fortran_COMPILER ${Trilinos_Fortran_COMPILER} CACHE STRING "From TrilinosConfig.cmake")
+SET(CMAKE_CXX_COMPILER_FLAGS ${Trilinos_CXX_COMPILER_FLAGS} CACHE STRING "From TrilinosConfig.cmake")
+SET(CMAKE_C_COMPILER_FLAGS ${Trilinos_C_COMPILER_FLAGS} CACHE STRING "From TrilinosConfig.cmake")
+SET(CMAKE_Fortran_COMPILER_FLAGS ${Trilinos_Fortran_COMPILER_FLAGS} CACHE STRING "From TrilinosConfig.cmake")
+SET(xSDKTrilinos_EXTRA_LINK_FLAGS ${Trilinos_EXTRA_LD_FLAGS} CACHE STRING "From TrilinosConfig.cmake")
+SET(CMAKE_AR ${Trilinos_AR} CACHE FILEPATH "From TrilinosConfig.cmake")
 TRIBITS_PROJECT()
 
 

@@ -60,6 +60,7 @@
 #ifdef HAVE_XSDKTRILINOS_EPETRA
   #include "Epetra_DataAccess.h"
   #include "Epetra_MultiVector.h"
+  #include "Epetra_Vector.h"
 #endif
 #include "Tpetra_MultiVector.hpp"
 

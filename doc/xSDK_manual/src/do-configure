@@ -1,30 +1,34 @@
 #!/bin/bash
 #
 
-TRILINOS_HOME=~/TrilinosDir/github/Trilinos
+TRILINOS_HOME=/path/to/Trilinos
 
-PETSC_INCLUDE_DIR=~/PETScDir/petsc-install/include
-PETSC_LIB_DIR=~/PETScDir/petsc-install/lib
+PETSC_INCLUDE_DIR=/path/to/petsc/include
+PETSC_LIB_DIR=/path/to/petsc/lib
 
-HYPRE_INCLUDE_DIR=~/PETScDir/petsc-install/include
-HYPRE_LIB_DIR=~/PETScDir/petsc-install/lib
+HYPRE_INCLUDE_DIR=/path/to/hypre/include
+HYPRE_LIB_DIR=/path/to/hypre/lib
 
-METIS_INCLUDE_DIR=~/parmetis-4.0.2/metis/include
-METIS_LIB_DIR=~/parmetis-4.0.2/build/Linux-x86_64/libmetis
+METIS_INCLUDE_DIR=/path/to/metis/include
+METIS_LIB_DIR=/path/to/metis/lib
 
-PARMETIS_INCLUDE_DIR=~/parmetis-4.0.2/include
-PARMETIS_LIB_DIR=~/parmetis-4.0.2/build/Linux-x86_64/libparmetis
+PARMETIS_INCLUDE_DIR=/path/to/parmetis/include
+PARMETIS_LIB_DIR=/path/to/parmetis/lib
 
-SUPERLU_INCLUDE_DIR=~/SuperLU/superlu_dist/include
-SUPERLU_LIB_DIR=~/SuperLU/superlu_dist/lib
+SUPERLU_INCLUDE_DIR=/path/to/superlu/include
+SUPERLU_LIB_DIR=/path/to/superlu/lib
 
 rm -rf CMakeFiles CMakeCache.txt
 
 cmake \
   -D CMAKE_BUILD_TYPE=DEBUG \
-  -D CMAKE_INSTALL_PREFIX:PATH="/home/amklinv/TrilinosDir\trilinos-install" \
+  -D CMAKE_INSTALL_PREFIX:PATH="~/trilinos-install" \
   -D TPL_ENABLE_MPI:BOOL=ON \
   -D Trilinos_ENABLE_EXPLICIT_INSTANTIATION:BOOL=ON \
+  -D Teuchos_ENABLE_COMPLEX:BOOL=OFF \
+  -D Trilinos_ENABLE_TESTS:BOOL=ON \
+  -D Trilinos_ENABLE_EXAMPLES:BOOL=ON \
+  -D Trilinos_ENABLE_ALL_OPTIONAL_PACKAGES=ON \
 \
   -D BLAS_LIBRARY_NAMES:STRING="libf77blas.so.3" \
   -D BLAS_LIBRARY_DIRS:PATH="/usr/lib64/atlas" \
@@ -48,14 +52,6 @@ cmake \
   -D SuperLUDist_INCLUDE_DIRS:FILEPATH="${SUPERLU_INCLUDE_DIR}" \
 \
   -D Trilinos_ENABLE_Amesos2:BOOL=ON \
-  -D Amesos2_ENABLE_TESTS:BOOL=ON \
-  -D Amesos2_ENABLE_EXAMPLES:BOOL=ON \
-\
-  -D Trilinos_EXTRA_REPOSITORIES:STRING=preCopyrightTrilinos \
   -D Trilinos_ENABLE_xSDKTrilinos:BOOL=ON \
-  -D xSDKTrilinos_USING_PETSC:BOOL=ON \
-  -D xSDKTrilinos_USING_HYPRE:BOOL=ON \
-  -D xSDKTrilinos_ENABLE_TESTS:BOOL=ON \
-  -D xSDKTrilinos_ENABLE_EXAMPLES:BOOL=ON \
 \
   ${TRILINOS_HOME}

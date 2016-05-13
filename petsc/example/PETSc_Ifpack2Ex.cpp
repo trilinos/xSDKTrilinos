@@ -210,8 +210,6 @@ int main(int argc, char *args[]) {
   std::vector<double> normErrorVec(1);
   errorVec.norm2(normErrorVec);
   if(rank == 0) std::cout << "Error: " << normErrorVec[0] << std::endl;
-  if(normErrorVec[0] > 1e-8)
-    return EXIT_FAILURE;
   
   //
   // Terminate PETSc

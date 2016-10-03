@@ -317,25 +317,25 @@ public:
     size_t getNodeNumDiags() const { return graph_->getNodeNumDiags(); };
 
     //! The Map associated with the domain of this operator, which must be compatible with X.getMap(). 
-    RCP<const Map<LO,GO,Node> > getDomainMap() const { return graph_->getDomainMap(); };
+    Teuchos::RCP<const Map<LO,GO,Node> > getDomainMap() const { return graph_->getDomainMap(); };
 
     //! The Map associated with the range of this operator, which must be compatible with Y.getMap(). 
-    RCP<const Map<LO,GO,Node> > getRangeMap() const  { return graph_->getRangeMap(); };
+    Teuchos::RCP<const Map<LO,GO,Node> > getRangeMap() const  { return graph_->getRangeMap(); };
 
     //! The Map that describes the distribution of rows over processes.
-    RCP<const Map<LO,GO,Node> > getRowMap() const { return graph_->getRowMap(); }
+    Teuchos::RCP<const Map<LO,GO,Node> > getRowMap() const { return graph_->getRowMap(); }
 
     //! The Map that describes the distribution of columns over processes. 
-    RCP<const Map<LO,GO,Node> > getColMap() const { return graph_->getColMap(); };
+    Teuchos::RCP<const Map<LO,GO,Node> > getColMap() const { return graph_->getColMap(); };
 
     //! The RowGraph associated with this matrix.
-    RCP<const RowGraph<LO,GO,Node> > getGraph() const { return graph_; };
+    Teuchos::RCP<const RowGraph<LO,GO,Node> > getGraph() const { return graph_; };
 
     //! The communicator over which this matrix is distributed. 
-    RCP<const Teuchos::Comm<int> > getComm() const { return graph_->getComm(); };
+    Teuchos::RCP<const Teuchos::Comm<int> > getComm() const { return graph_->getComm(); };
 
     //! The Kokkos Node instance.
-    RCP<Node> getNode() const { return graph_->getNode(); };
+    Teuchos::RCP<Node> getNode() const { return graph_->getNode(); };
   //@}
   
   //! @name Additional methods required to implement RowMatrix interface
@@ -355,7 +355,7 @@ public:
 
     Mat Amat_; // general PETSc matrix type
 
-    RCP<Graph> graph_;
+    Teuchos::RCP<Graph> graph_;
     
  //! Copy constructor (not accessible to users).
   //FIXME we need a copy ctor
@@ -529,7 +529,7 @@ void PETScAIJMatrix<Scalar,LO,GO,Node>::leftScale(const Vector<Scalar,LO,GO,Node
   Vec petscX;
 
   // Get the data from x
-  ArrayRCP<const Scalar> xView = x.get1dView();
+  Teuchos::ArrayRCP<const Scalar> xView = x.get1dView();
 
   // Copy x to petscX
 #   ifdef HAVE_MPI
@@ -553,7 +553,7 @@ void PETScAIJMatrix<Scalar,LO,GO,Node>::rightScale(const Vector<Scalar,LO,GO,Nod
   Vec petscX;
 
   // Get the data from x
-  ArrayRCP<const Scalar> xView = x.get1dView();
+  Teuchos::ArrayRCP<const Scalar> xView = x.get1dView();
 
   // Copy x to petscX
 #   ifdef HAVE_MPI

@@ -59,6 +59,7 @@
 #else
 #include "Teuchos_DefaultSerialComm.hpp"
 #endif
+#include "Teuchos_RCP.hpp"
 //Petsc headers.
 #include "petscmat.h"
 #include <type_traits>
@@ -103,28 +104,28 @@ public:
   //@{ 
 
   //! The communicator over which this matrix is distributed. 
-  RCP<const Comm> getComm() const {return comm_;};
+  Teuchos::RCP<const Comm> getComm() const {return comm_;};
 
   //! The Kokkos Node instance.
-  RCP<Node> getNode() const { return rowMap_->getNode(); };
+  Teuchos::RCP<Node> getNode() const { return rowMap_->getNode(); };
 
   //! The Map that describes the distribution of rows over processes.
-  RCP<const Map<LO,GO,Node> > getRowMap() const { return rowMap_; };
+  Teuchos::RCP<const Map<LO,GO,Node> > getRowMap() const { return rowMap_; };
 
   //! The Map that describes the distribution of columns over processes. 
-  RCP<const Map<LO,GO,Node> > getColMap() const { return colMap_; };
+  Teuchos::RCP<const Map<LO,GO,Node> > getColMap() const { return colMap_; };
 
   //! The Map associated with the domain of this operator, which must be compatible with X.getMap(). 
-  RCP<const Map<LO,GO,Node> > getDomainMap() const { return rowMap_; }; // TODO: domain and range map should not be the same
+  Teuchos::RCP<const Map<LO,GO,Node> > getDomainMap() const { return rowMap_; }; // TODO: domain and range map should not be the same
 
   //! The Map associated with the range of this operator, which must be compatible with Y.getMap(). 
-  RCP<const Map<LO,GO,Node> > getRangeMap() const { return rowMap_; };
+  Teuchos::RCP<const Map<LO,GO,Node> > getRangeMap() const { return rowMap_; };
 
   //! This graph's Import object.
-  RCP<const Import<LO,GO,Node> > getImporter() const { return importer_; };
+  Teuchos::RCP<const Import<LO,GO,Node> > getImporter() const { return importer_; };
 
   //! This graph's Export object.
-  RCP<const Export<LO,GO,Node> > getExporter() const { return exporter_; };
+  Teuchos::RCP<const Export<LO,GO,Node> > getExporter() const { return exporter_; };
 
   //! The global number of rows of this matrix. 
   global_size_t getGlobalNumRows() const { return numGlobalRows_; };
@@ -189,24 +190,24 @@ public:
   //@{ 
 
   //! Get a copy of the given global row's entries. 
-  void getGlobalRowCopy(GO globalRow, const ArrayView<GO> &indices, size_t &numIndices) const;
+  void getGlobalRowCopy(GO globalRow, const Teuchos::ArrayView<GO> &indices, size_t &numIndices) const;
 
   //! Get a copy of the given local row's entries. 
-  void getLocalRowCopy(LO localRow, const ArrayView<LO> &indices, size_t &numIndices) const;
+  void getLocalRowCopy(LO localRow, const Teuchos::ArrayView<LO> &indices, size_t &numIndices) const;
 
   //@}*/
 
 private:
   Mat PETScMat_;   // PETSc matrix
-  RCP<Comm> comm_; // Teuchos communicator
-  RCP<Import<LO,GO,Node> > importer_;
-  RCP<Export<LO,GO,Node> > exporter_;
+  Teuchos::RCP<Comm> comm_; // Teuchos communicator
+  Teuchos::RCP<Import<LO,GO,Node> > importer_;
+  Teuchos::RCP<Export<LO,GO,Node> > exporter_;
 
   LO numLocalRows_;
   size_t numLocalCols_;
   global_size_t numGlobalCols_;
   GO numGlobalRows_;
-  RCP<const Map<LO,GO,Node> > rowMap_, colMap_;
+  Teuchos::RCP<const Map<LO,GO,Node> > rowMap_, colMap_;
   global_size_t nnzGlobal_;
   size_t nnzLocal_;
 };
@@ -277,7 +278,7 @@ PETScAIJGraph<LO,GO,Node>::PETScAIJGraph(Mat PETScMat)
 
 //  for(size_t i=0; i<10; i++) std::cerr << "garray[" << i << "] = " << garray[i] << std::endl;
 
-  Array<int> ColGIDs(numLocalCols_);
+  Teuchos::Array<int> ColGIDs(numLocalCols_);
   for (PetscInt i=0; i<PETScLocalCols; i++) ColGIDs[i] = rowStart + i;
   for (size_t i=PETScLocalCols; i<numLocalCols_; i++) ColGIDs[i] = garray[i-PETScLocalCols];
 
@@ -390,7 +391,7 @@ size_t PETScAIJGraph<LO,GO,Node>::getNodeMaxNumRowEntries() const
 //! Get a copy of the given global row's entries. 
 //==============================================================================
 template<class LO, class GO, class Node>
-void PETScAIJGraph<LO,GO,Node>::getGlobalRowCopy(GO globalRow, const ArrayView<GO> &indices, size_t &numIndices) const
+void PETScAIJGraph<LO,GO,Node>::getGlobalRowCopy(GO globalRow, const Teuchos::ArrayView<GO> &indices, size_t &numIndices) const
 {
   PetscErrorCode ierr;
   PetscInt ncols;
@@ -414,7 +415,7 @@ void PETScAIJGraph<LO,GO,Node>::getGlobalRowCopy(GO globalRow, const ArrayView<G
 //! Get a copy of the given local row's entries. 
 //==============================================================================
 template<class LO, class GO, class Node>
-void PETScAIJGraph<LO,GO,Node>::getLocalRowCopy(LO localRow, const ArrayView<LO> &indices, size_t &numIndices) const
+void PETScAIJGraph<LO,GO,Node>::getLocalRowCopy(LO localRow, const Teuchos::ArrayView<LO> &indices, size_t &numIndices) const
 {
   GO globalRow = localRow + rowMap_->getMinGlobalIndex();
   

@@ -209,7 +209,7 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
       ierr = MatSetSizes(A,numLocal,numLocal,PETSC_DETERMINE,PETSC_DETERMINE);CHKERRV(ierr);
       ierr = MatSetType(A, MATAIJ);CHKERRV(ierr);
       ierr = MatSetFromOptions(A);CHKERRV(ierr);
-      ierr = MatMPIAIJSetPreallocation(A,0,PETSC_NULL,0,PETSC_NULL);CHKERRV(ierr);
+      ierr = MatMPIAIJSetPreallocation(A,0,NULL,0,NULL);CHKERRV(ierr);
       ierr = MatSetUp(A);CHKERRV(ierr);
 
       ierr = MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY);CHKERRV(ierr);
@@ -280,7 +280,7 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
       ierr = MatSetSizes(A,numLocal,numLocal,PETSC_DETERMINE,PETSC_DETERMINE);CHKERRV(ierr);
       ierr = MatSetType(A, MATAIJ);CHKERRV(ierr);
       ierr = MatSetFromOptions(A);CHKERRV(ierr);
-      ierr = MatMPIAIJSetPreallocation(A,1,PETSC_NULL,0,PETSC_NULL);CHKERRV(ierr);
+      ierr = MatMPIAIJSetPreallocation(A,1,NULL,0,NULL);CHKERRV(ierr);
       ierr = MatSetUp(A);CHKERRV(ierr);
 
       ierr = MatGetOwnershipRange(A,&Istart,&Iend);CHKERRV(ierr);
@@ -383,7 +383,7 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
       ierr = MatSetSizes(PA,ONE,ONE,PETSC_DETERMINE,PETSC_DETERMINE);CHKERRV(ierr);
       ierr = MatSetType(PA, MATAIJ);CHKERRV(ierr);
       ierr = MatSetFromOptions(PA);CHKERRV(ierr);
-      ierr = MatMPIAIJSetPreallocation(PA,1,PETSC_NULL,2,PETSC_NULL);CHKERRV(ierr);
+      ierr = MatMPIAIJSetPreallocation(PA,1,NULL,2,NULL);CHKERRV(ierr);
       ierr = MatSetUp(PA);CHKERRV(ierr);
 
       ierr = MatGetOwnershipRange(PA,&Istart,&Iend);CHKERRV(ierr);
@@ -464,7 +464,7 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
       ierr = MatSetSizes(A,numLocal,numLocal,PETSC_DETERMINE,PETSC_DETERMINE);CHKERRV(ierr);
       ierr = MatSetType(A, MATAIJ);CHKERRV(ierr);
       ierr = MatSetFromOptions(A);CHKERRV(ierr);
-      ierr = MatMPIAIJSetPreallocation(A,0,PETSC_NULL,0,PETSC_NULL);CHKERRV(ierr);
+      ierr = MatMPIAIJSetPreallocation(A,0,NULL,0,NULL);CHKERRV(ierr);
       ierr = MatSetUp(A);CHKERRV(ierr);
 
       ierr = MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY);CHKERRV(ierr);
@@ -538,7 +538,7 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
       ierr = MatSetSizes(PA,ONE,PETSC_DECIDE,numImages,numImages);CHKERRV(ierr);
       ierr = MatSetType(PA, MATAIJ);CHKERRV(ierr);
       ierr = MatSetFromOptions(PA);CHKERRV(ierr);
-      ierr = MatMPIAIJSetPreallocation(PA,1,PETSC_NULL,2,PETSC_NULL);CHKERRV(ierr);
+      ierr = MatMPIAIJSetPreallocation(PA,1,NULL,2,NULL);CHKERRV(ierr);
       ierr = MatSetUp(PA);CHKERRV(ierr);
 
       ierr = MatGetOwnershipRange(PA,&Istart,&Iend);CHKERRV(ierr);
@@ -665,7 +665,7 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
       ierr = MatSetSizes(PA,1,PETSC_DECIDE,numImages,numImages);CHKERRV(ierr);
       ierr = MatSetType(PA, MATAIJ);CHKERRV(ierr);
       ierr = MatSetFromOptions(PA);CHKERRV(ierr);
-      ierr = MatMPIAIJSetPreallocation(PA,1,PETSC_NULL,2,PETSC_NULL);CHKERRV(ierr);
+      ierr = MatMPIAIJSetPreallocation(PA,1,NULL,2,NULL);CHKERRV(ierr);
       ierr = MatSetUp(PA);CHKERRV(ierr);
 
       ierr = MatGetOwnershipRange(PA,&Istart,&Iend);CHKERRV(ierr);
@@ -750,7 +750,7 @@ inline void tupleToArray(Array<T> &arr, const tuple &tup)
       ierr = MatSetSizes(A,THREE,THREE,PETSC_DETERMINE,PETSC_DETERMINE);CHKERRV(ierr);
       ierr = MatSetType(A, MATAIJ);CHKERRV(ierr);
       ierr = MatSetFromOptions(A);CHKERRV(ierr);
-      ierr = MatMPIAIJSetPreallocation(A,1,PETSC_NULL,0,PETSC_NULL);CHKERRV(ierr);
+      ierr = MatMPIAIJSetPreallocation(A,1,NULL,0,NULL);CHKERRV(ierr);
       ierr = MatSetUp(A);CHKERRV(ierr);
 
       ierr = MatGetOwnershipRange(A,&Istart,&Iend);CHKERRV(ierr);

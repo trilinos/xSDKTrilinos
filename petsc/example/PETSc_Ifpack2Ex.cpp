@@ -89,6 +89,7 @@ int main(int argc, char *args[]) {
   PetscErrorCode ierr;
   PetscScalar    v;
   PetscInt       rank=0;
+  PetscReal      norm, petscNormB;
   MPI_Comm       comm;
 
   //
@@ -211,6 +212,23 @@ int main(int argc, char *args[]) {
   errorVec.norm2(normErrorVec);
   if(rank == 0) std::cout << "Error: " << normErrorVec[0] << std::endl;
   
+  //
+  // Convert back to PETSc types
+  //
+  Vec* petscX = xSDKTrilinos::deepCopyTpetraVectorToPETScVec(tpetraX.getConst());
+  Vec* petscB = xSDKTrilinos::deepCopyTpetraVectorToPETScVec(tpetraB.getConst());
+
+  //
+  // Check the residual
+  //
+  ierr = VecNorm(*petscB,NORM_2,&petscNormB);
+  ierr = VecScale(*petscX, -1.0); CHKERRQ(ierr);
+  ierr = MatMultAdd(A,*petscX,*petscB,*petscB); CHKERRQ(ierr);
+  ierr = VecNorm(*petscB,NORM_2,&norm);
+  if(rank == 0) std::cout << "PETSc relative residual: " << norm / petscNormB << std::endl;
+  if(norm / petscNormB > 1e-8)
+    return EXIT_FAILURE;
+
   //
   // Terminate PETSc
   //

@@ -168,7 +168,35 @@ Teuchos::RCP<Tpetra::Vector<Scalar,LO,GO,Node> > deepCopyPETScVecToTpetraVector(
   return tpvec;
 }
 
+template<class Scalar, class LO, class GO, class Node>
+Vec* deepCopyTpetraVectorToPETScVec(Teuchos::RCP<const Tpetra::Vector<Scalar,LO,GO,Node> > v)
+{
+  PetscErrorCode        ierr;
+  Vec*                  petscVec;
+  PetscInt              localSize;
+  PetscInt              globalSize;
+  PetscScalar*          petscData;
+  const PetscScalar*    tpetraData;
+
+  localSize = v->getLocalLength();
+  globalSize = v->getGlobalLength();
+
+  petscVec = new Vec;
+  ierr = VecCreate(PETSC_COMM_WORLD,petscVec);CHKERRCONTINUE(ierr);
+  ierr = VecSetSizes(*petscVec,localSize,globalSize);CHKERRCONTINUE(ierr);
+  ierr = VecSetFromOptions(*petscVec);CHKERRCONTINUE(ierr);
+
+  ierr = VecGetArray(*petscVec, &petscData); CHKERRCONTINUE(ierr);
+
+  tpetraData = v->getData().get();
+  for(PetscInt i=0; i<localSize; i++) petscData[i] = tpetraData[i];
+
+  ierr = VecRestoreArray(*petscVec,&petscData); CHKERRCONTINUE(ierr);
+
+  return petscVec;
 }
+
+} // end namespace xSDKTrilinos
 
 
 namespace Tpetra {
